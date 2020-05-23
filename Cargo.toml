@@ -3,6 +3,12 @@ name = "verticareader"
 version = "0.1.0"
 authors = ["Joey Gibson <joey@joeygibson.com>"]
 edition = "2018"
+description = "A program to read Vertica native binary files and convert them to CSV."
+readme = "README.md"
+repository = "https://github.com/joeygibson/verticareader"
+license = "MIT"
+keywords = ["vertica", "database", "csv", "binary"]
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
