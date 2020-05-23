@@ -95,3 +95,8 @@ Interval/Space_Between
 
 This code was tested against [the example provided by Vertica](https://www.vertica.com/docs/9.2.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/Example.htm)
 which is included in `data/alltypes.bin`.
+
+## Todo
+
+The `Numeric` datatype is proving difficult to implement, so it is currently not supported.
+
