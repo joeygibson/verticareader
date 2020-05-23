@@ -1,0 +1,6 @@
+Integer
+Float
+Char
+XXX
+Boolean
+Date

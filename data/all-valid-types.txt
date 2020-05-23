@@ -1,0 +1,16 @@
+Integer
+Float
+Char
+Varchar
+Boolean
+Date
+Timestamp
+TimestampTz
+Time
+TimeTz
+Varbinary
+Binary
+Numeric
+Interval
+
+

@@ -1,0 +1,16 @@
+Integer/IntCol
+Float/FloatCol
+Char / CharCol
+Varchar/VarCharCol
+Boolean/Bools
+Date/The_Date
+Timestamp/TS_Elliot
+TimestampTz/TS_TZ
+Time/Clock
+TimeTz/Clock_TZ
+Varbinary/VB3
+Binary/BiN
+Numeric/Num_Num_Num
+Interval/Space_Between
+
+
