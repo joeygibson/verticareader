@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn test_read_from_good_file() {
-        let mut file = File::open("data/alltypes.bin").unwrap();
+        let mut file = File::open("data/all-types.bin").unwrap();
 
         let res = FileSignature::from_reader(&mut file);
 
@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_read_from_bad_file() {
-        let mut file = File::open("data/alltypes-bad-signature.bin").unwrap();
+        let mut file = File::open("data/all-types-with-bad-signature.bin").unwrap();
 
         let res = FileSignature::from_reader(&mut file);
 

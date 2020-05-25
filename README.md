@@ -93,10 +93,14 @@ Interval/Space_Between
 
 ## Accuracy
 
-This code was tested against [the example provided by Vertica](https://www.vertica.com/docs/9.2.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/Example.htm)
-which is included in `data/alltypes.bin`.
+This code was tested against [the example provided by Vertica](https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/Example.htm)
+which is included in `data/all-types.bin`.
 
-## Todo
+## Test data
 
-The `Numeric` datatype is proving difficult to implement, so it is currently not supported.
+I created the test data files using the Vertica-supplied [hex source](https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/Example.htm).
+I ran it through the script in `scripts/hex-to-binary` to get the binary version. Similarly,
+I modified that hex source to generate the other two data files, with their various
+changes, and ran `scripts/hex-to-binary` on them, too.
 
+To go from binary to hex, you can run `hexdump -v <input file>`.

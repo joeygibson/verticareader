@@ -49,7 +49,7 @@ mod tests {
     fn test_read_from_good_file() {
         use std::fs::File;
 
-        let mut file = File::open("data/alltypes.bin").unwrap();
+        let mut file = File::open("data/all-types.bin").unwrap();
 
         file.seek(SeekFrom::Start(11)).unwrap();
 

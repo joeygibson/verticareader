@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+if [ "$#" -ne 2 ]; then
+    echo "Usage: hex-to-binary <input file> <output file>"
+    exit 1
+fi
+
+xxd -r -p $1 $2
