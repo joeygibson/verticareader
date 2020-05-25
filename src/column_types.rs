@@ -235,9 +235,14 @@ impl ColumnType {
                             .collect::<Vec<u8>>();
 
                         match column_conversion {
-                            None => format!("{:X?}", filtered_bytes)
-                                .replace("[", "")
-                                .replace("]", ""),
+                            None => {
+                                let byte_values: String =
+                                    filtered_bytes.iter()
+                                    .map(|b| format!("{:X?}", b))
+                                    .collect();
+
+                                format!("0x{}", byte_values)
+                            }
                             Some(conversion) => conversion.convert(filtered_bytes),
                         }
                     }
