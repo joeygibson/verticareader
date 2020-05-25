@@ -237,9 +237,7 @@ impl ColumnType {
                         match column_conversion {
                             None => {
                                 let byte_values: String =
-                                    filtered_bytes.iter()
-                                    .map(|b| format!("{:X?}", b))
-                                    .collect();
+                                    filtered_bytes.iter().map(|b| format!("{:X?}", b)).collect();
 
                                 format!("0x{}", byte_values)
                             }
@@ -247,11 +245,24 @@ impl ColumnType {
                         }
                     }
                     ColumnType::Numeric => {
-                        // let bytes = &value[..];
-                        // let as_u64 = u64::from_le_bytes(bytes.try_into().unwrap());
-                        //
-                        // println!("VLA: {}", as_u64);
-                        "NUMERIC".to_string()
+                        let bytes = &value[..];
+                        let mut chunks: Vec<u64> = vec![];
+
+                        for i in 0..(bytes.len() / 8) {
+                            let chunk = u64::from_le_bytes(
+                                bytes[(i * 8)..((i + 1) * 8)].try_into().unwrap(),
+                            );
+
+                            chunks.push(chunk);
+                        }
+
+                        let filtered_chunks: Vec<String> = chunks
+                            .iter()
+                            .skip_while(|chunk| **chunk == 0)
+                            .map(|chunk| chunk.to_string())
+                            .collect();
+
+                        filtered_chunks.join("")
                     }
                     ColumnType::Interval => {
                         let bytes = &value[..];
