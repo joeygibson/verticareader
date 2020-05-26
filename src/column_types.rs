@@ -794,6 +794,34 @@ mod tests {
             }
         }
 
+        #[test]
+        fn test_interval() {
+            let column_type = ColumnType::Interval;
+
+            let midnight = NaiveTime::from_hms_nano(0, 0, 0, 0);
+
+            let expected_outputs = vec!["05:30:15", "11:22:33", "17:15:16"];
+            let inputs: Vec<i64> = expected_outputs
+                .iter()
+                .map(|time_str| {
+                    let time = NaiveTime::parse_from_str(time_str, "%H:%M:%S").unwrap();
+                    let diff = time - midnight;
+                    diff.num_microseconds().unwrap()
+                })
+                .collect();
+
+            let u_inputs = vec_i_into_u::<i64, u64>(inputs);
+
+            for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
         fn vec_i_into_u<T, U>(v: Vec<T>) -> Vec<U> {
             // Stolen from https://stackoverflow.com/a/59707887
             // and adapted to be generic
