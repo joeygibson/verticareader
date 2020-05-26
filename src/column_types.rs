@@ -127,10 +127,10 @@ impl ColumnType {
                         let bytes = &value[..];
 
                         match bytes.len() {
-                            8 => format!("{}", u64::from_le_bytes(bytes.try_into().unwrap())),
-                            4 => format!("{}", u32::from_le_bytes(bytes.try_into().unwrap())),
-                            2 => format!("{}", u16::from_le_bytes(bytes.try_into().unwrap())),
-                            1 => format!("{}", u8::from_le_bytes(bytes.try_into().unwrap())),
+                            8 => format!("{}", i64::from_le_bytes(bytes.try_into().unwrap())),
+                            4 => format!("{}", i32::from_le_bytes(bytes.try_into().unwrap())),
+                            2 => format!("{}", i16::from_le_bytes(bytes.try_into().unwrap())),
+                            1 => format!("{}", i8::from_le_bytes(bytes.try_into().unwrap())),
                             _ => panic!("incorrect integer byte count"),
                         }
                     }
@@ -350,6 +350,186 @@ mod tests {
             let file = File::open("data/types-with-one-invalid.txt").unwrap();
 
             ColumnTypes::from_reader(file).unwrap();
+        }
+    }
+
+    mod format_value_tests {
+        use crate::column_types::ColumnType;
+
+        #[test]
+        fn test_i8() {
+            let ct_int = ColumnType::Integer;
+
+            let mut inputs: Vec<u8> = vec_i_into_u::<i8, u8>(vec![-127i8, -100i8, -1i8]);
+
+            let mut positives: Vec<u8> = vec![0, 23, 127];
+            inputs.append(&mut positives);
+
+            let expected_outputs = vec!["-127", "-100", "-1", "0", "23", "127"];
+
+            for (input, expected_output) in inputs.iter().zip(expected_outputs) {
+                let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
+
+                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
+        #[test]
+        fn test_i16() {
+            let ct_int = ColumnType::Integer;
+
+            let mut inputs = vec_i_into_u::<i16, u16>(vec![-32768, -16600, -1]);
+            let mut positives: Vec<u16> = vec![0, 23, 127, 128, 255, 256, 512, 1024, 16235];
+
+            inputs.append(&mut positives);
+
+            let expected_outputs = vec![
+                "-32768", "-16600", "-1", "0", "23", "127", "128", "255", "256", "512", "1024",
+                "16235",
+            ];
+
+            for (input, expected_output) in inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
+        #[test]
+        fn test_i32() {
+            let ct_int = ColumnType::Integer;
+
+            let mut inputs: Vec<u32> =
+                vec_i_into_u::<i32, u32>(vec![-2147483648, -101010101, -65536, -12345, -1]);
+
+            let mut positives: Vec<u32> = vec![
+                0, 23, 127, 128, 255, 256, 512, 1024, 16235, 65535, 65536, 123456, 900000,
+                2147483647,
+            ];
+
+            inputs.append(&mut positives);
+
+            let expected_outputs = vec![
+                "-2147483648",
+                "-101010101",
+                "-65536",
+                "-12345",
+                "-1",
+                "0",
+                "23",
+                "127",
+                "128",
+                "255",
+                "256",
+                "512",
+                "1024",
+                "16235",
+                "65535",
+                "65536",
+                "123456",
+                "900000",
+                "2147483647",
+            ];
+
+            for (input, expected_output) in inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
+        #[test]
+        fn test_i64() {
+            let ct_int = ColumnType::Integer;
+
+            let mut inputs: Vec<u64> = vec_i_into_u::<i64, u64>(vec![
+                -9223372036854775808,
+                -2147483648,
+                -101010101,
+                -65536,
+                -12345,
+                -1,
+            ]);
+
+            let mut positives: Vec<u64> = vec![
+                0,
+                23,
+                127,
+                128,
+                255,
+                256,
+                512,
+                1024,
+                16235,
+                65535,
+                65536,
+                123456,
+                900000,
+                2147483647,
+                9223372036854775807,
+            ];
+
+            inputs.append(&mut positives);
+
+            let expected_outputs = vec![
+                "-9223372036854775808",
+                "-2147483648",
+                "-101010101",
+                "-65536",
+                "-12345",
+                "-1",
+                "0",
+                "23",
+                "127",
+                "128",
+                "255",
+                "256",
+                "512",
+                "1024",
+                "16235",
+                "65535",
+                "65536",
+                "123456",
+                "900000",
+                "2147483647",
+                "9223372036854775807",
+            ];
+
+            for (input, expected_output) in inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
+        fn vec_i_into_u<T, U>(v: Vec<T>) -> Vec<U> {
+            // Stolen from https://stackoverflow.com/a/59707887
+            // and adapted to be generic
+            // ideally we'd use Vec::into_raw_parts, but it's unstable,
+            // so we have to do it manually:
+
+            // first, make sure v's destructor doesn't free the data
+            // it thinks it owns when it goes out of scope
+            let mut v = std::mem::ManuallyDrop::new(v);
+
+            // then, pick apart the existing Vec
+            let p = v.as_mut_ptr();
+            let len = v.len();
+            let cap = v.capacity();
+
+            // finally, adopt the data into a new Vec
+            unsafe { Vec::from_raw_parts(p as *mut U, len, cap) }
         }
     }
 }
