@@ -776,6 +776,24 @@ mod tests {
             }
         }
 
+        #[test]
+        fn test_numeric() {
+            let column_type = ColumnType::Numeric;
+
+            let inputs: Vec<i64> = vec![123456789, 123456789123456789];
+            let expected_outputs = vec!["123456789", "123456789123456789"];
+            let u_inputs = vec_i_into_u::<i64, u64>(inputs);
+
+            for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(output, expected_output);
+            }
+        }
+
         fn vec_i_into_u<T, U>(v: Vec<T>) -> Vec<U> {
             // Stolen from https://stackoverflow.com/a/59707887
             // and adapted to be generic
