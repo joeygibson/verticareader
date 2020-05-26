@@ -354,11 +354,13 @@ mod tests {
     }
 
     mod format_value_tests {
+        use chrono::{Duration, NaiveDate};
+
         use crate::column_types::ColumnType;
 
         #[test]
         fn test_i8() {
-            let ct_int = ColumnType::Integer;
+            let column_type = ColumnType::Integer;
 
             let mut inputs: Vec<u8> = vec_i_into_u::<i8, u8>(vec![-127i8, -100i8, -1i8]);
 
@@ -370,7 +372,7 @@ mod tests {
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
 
-                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
 
                 assert_eq!(expected_output, output);
             }
@@ -378,7 +380,7 @@ mod tests {
 
         #[test]
         fn test_i16() {
-            let ct_int = ColumnType::Integer;
+            let column_type = ColumnType::Integer;
 
             let mut inputs = vec_i_into_u::<i16, u16>(vec![-32768, -16600, -1]);
             let mut positives: Vec<u16> = vec![0, 23, 127, 128, 255, 256, 512, 1024, 16235];
@@ -394,7 +396,7 @@ mod tests {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
 
                 assert_eq!(expected_output, output);
             }
@@ -402,7 +404,7 @@ mod tests {
 
         #[test]
         fn test_i32() {
-            let ct_int = ColumnType::Integer;
+            let column_type = ColumnType::Integer;
 
             let mut inputs: Vec<u32> =
                 vec_i_into_u::<i32, u32>(vec![-2147483648, -101010101, -65536, -12345, -1]);
@@ -440,7 +442,7 @@ mod tests {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
 
                 assert_eq!(expected_output, output);
             }
@@ -448,7 +450,7 @@ mod tests {
 
         #[test]
         fn test_i64() {
-            let ct_int = ColumnType::Integer;
+            let column_type = ColumnType::Integer;
 
             let mut inputs: Vec<u64> = vec_i_into_u::<i64, u64>(vec![
                 -9223372036854775808,
@@ -507,7 +509,7 @@ mod tests {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
 
                 assert_eq!(expected_output, output);
             }
@@ -515,7 +517,7 @@ mod tests {
 
         #[test]
         fn test_float() {
-            let ct_int = ColumnType::Float;
+            let column_type = ColumnType::Float;
 
             let inputs: Vec<f64> = vec![-123456.123, -23.123, 0_f64, 123.23, 123456.123];
 
@@ -525,7 +527,7 @@ mod tests {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
 
                 assert_eq!(expected_output, output);
             }
@@ -533,7 +535,7 @@ mod tests {
 
         #[test]
         fn test_char() {
-            let ct_int = ColumnType::Char;
+            let column_type = ColumnType::Char;
 
             let inputs: Vec<u8> = vec!['a' as u8, 'A' as u8, 'z' as u8, 'Z' as u8];
 
@@ -542,7 +544,7 @@ mod tests {
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
 
-                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
 
                 assert_eq!(expected_output, output);
             }
@@ -550,7 +552,7 @@ mod tests {
 
         #[test]
         fn test_varchar() {
-            let ct_int = ColumnType::Varchar;
+            let column_type = ColumnType::Varchar;
 
             let inputs: Vec<&str> = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀"];
 
@@ -560,7 +562,7 @@ mod tests {
                 let bytes = input.as_bytes();
                 let byte_vec_option: Option<Vec<u8>> = Some(bytes.to_vec());
 
-                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
 
                 assert_eq!(expected_output, output);
             }
@@ -568,7 +570,7 @@ mod tests {
 
         #[test]
         fn test_boolean() {
-            let ct_int = ColumnType::Boolean;
+            let column_type = ColumnType::Boolean;
 
             let inputs: Vec<u8> = vec![1, 0];
 
@@ -577,7 +579,35 @@ mod tests {
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
 
-                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
+        #[test]
+        fn test_date() {
+            let column_type = ColumnType::Date;
+
+            let vertica_epoch_date = NaiveDate::from_ymd(2000, 1, 1);
+
+            let expected_outputs = vec!["2001-01-01", "2006-08-23", "1990-05-01"];
+            let inputs: Vec<i64> = expected_outputs
+                .iter()
+                .map(|date_str| {
+                    let date = NaiveDate::parse_from_str(*date_str, "%Y-%m-%d").unwrap();
+                    let days_between = date - vertica_epoch_date;
+                    days_between.num_days()
+                })
+                .collect();
+
+            let u_inputs = vec_i_into_u::<i64, u64>(inputs);
+
+            for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
 
                 assert_eq!(expected_output, output);
             }
