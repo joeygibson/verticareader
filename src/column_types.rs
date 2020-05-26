@@ -514,7 +514,7 @@ mod tests {
         }
 
         #[test]
-        fn test_f64() {
+        fn test_float() {
             let ct_int = ColumnType::Float;
 
             let inputs: Vec<f64> = vec![-123456.123, -23.123, 0_f64, 123.23, 123456.123];
@@ -565,6 +565,24 @@ mod tests {
                 assert_eq!(expected_output, output);
             }
         }
+
+        #[test]
+        fn test_boolean() {
+            let ct_int = ColumnType::Boolean;
+
+            let inputs: Vec<u8> = vec![1, 0];
+
+            let expected_outputs = vec!["true", "false"];
+
+            for (input, expected_output) in inputs.iter().zip(expected_outputs) {
+                let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
+
+                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
         fn vec_i_into_u<T, U>(v: Vec<T>) -> Vec<U> {
             // Stolen from https://stackoverflow.com/a/59707887
             // and adapted to be generic
