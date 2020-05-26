@@ -654,6 +654,52 @@ mod tests {
             }
         }
 
+        #[test]
+        fn test_timestamptz() {
+            let column_type = ColumnType::TimestampTz;
+
+            let vertica_epoch_date = NaiveDate::from_ymd(2000, 1, 1).and_hms_nano(0, 0, 0, 0);
+
+            let string_inputs: Vec<&str> = vec![
+                "2001-01-01 00:00:00+0000",
+                "2006-08-23 00:00:00+0000",
+                "1990-05-01 00:00:00+0000",
+                "1980-12-25 01:23:34+0000",
+                "1492-04-05 12:12:12+0000",
+            ];
+
+            let expected_outputs: Vec<String> = string_inputs.iter()
+                .map(|s| s[0..(s.len() - 2)].to_string())
+                .collect();
+
+            let inputs: Vec<i64> = string_inputs
+                .iter()
+                .map(|date_str| {
+                    let date = match NaiveDateTime::parse_from_str(*date_str, "%Y-%m-%d %H:%M:%S%z") {
+                        Ok(d) => d,
+                        Err(e) => panic!(e),
+                    };
+
+                    let diff = date.signed_duration_since(vertica_epoch_date);
+                    match diff.num_microseconds() {
+                        None => panic!("no microseconds"),
+                        Some(micros) => micros,
+                    }
+                })
+                .collect();
+
+            let u_inputs = vec_i_into_u::<i64, u64>(inputs);
+
+            for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(output, expected_output);
+            }
+        }
+
         fn vec_i_into_u<T, U>(v: Vec<T>) -> Vec<U> {
             // Stolen from https://stackoverflow.com/a/59707887
             // and adapted to be generic
