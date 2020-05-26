@@ -354,7 +354,7 @@ mod tests {
     }
 
     mod format_value_tests {
-        use chrono::{Duration, NaiveDate};
+        use chrono::{NaiveDate, NaiveDateTime};
 
         use crate::column_types::ColumnType;
 
@@ -598,6 +598,47 @@ mod tests {
                     let date = NaiveDate::parse_from_str(*date_str, "%Y-%m-%d").unwrap();
                     let days_between = date - vertica_epoch_date;
                     days_between.num_days()
+                })
+                .collect();
+
+            let u_inputs = vec_i_into_u::<i64, u64>(inputs);
+
+            for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
+        #[test]
+        fn test_timestamp() {
+            let column_type = ColumnType::Timestamp;
+
+            let vertica_epoch_date = NaiveDate::from_ymd(2000, 1, 1).and_hms_nano(0, 0, 0, 0);
+
+            let expected_outputs = vec![
+                "2001-01-01 00:00:00",
+                "2006-08-23 00:00:00",
+                "1990-05-01 00:00:00",
+                "1980-12-25 01:23:34",
+                "1492-04-05 12:12:12",
+            ];
+            let inputs: Vec<i64> = expected_outputs
+                .iter()
+                .map(|date_str| {
+                    let date = match NaiveDateTime::parse_from_str(*date_str, "%Y-%m-%d %H:%M:%S") {
+                        Ok(d) => d,
+                        Err(e) => panic!(e),
+                    };
+
+                    let diff = date.signed_duration_since(vertica_epoch_date);
+                    match diff.num_microseconds() {
+                        None => panic!("no microseconds"),
+                        Some(micros) => micros,
+                    }
                 })
                 .collect();
 
