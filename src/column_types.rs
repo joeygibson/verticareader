@@ -668,14 +668,16 @@ mod tests {
                 "1492-04-05 12:12:12+0000",
             ];
 
-            let expected_outputs: Vec<String> = string_inputs.iter()
+            let expected_outputs: Vec<String> = string_inputs
+                .iter()
                 .map(|s| s[0..(s.len() - 2)].to_string())
                 .collect();
 
             let inputs: Vec<i64> = string_inputs
                 .iter()
                 .map(|date_str| {
-                    let date = match NaiveDateTime::parse_from_str(*date_str, "%Y-%m-%d %H:%M:%S%z") {
+                    let date = match NaiveDateTime::parse_from_str(*date_str, "%Y-%m-%d %H:%M:%S%z")
+                    {
                         Ok(d) => d,
                         Err(e) => panic!(e),
                     };
@@ -724,6 +726,53 @@ mod tests {
                 let output = column_type.format_value(&byte_vec_option, 0, &None);
 
                 assert_eq!(expected_output, output);
+            }
+        }
+
+        // TODO: I need to think more about how to test this one. It does work
+        // correctly against `data/all-types.bin`.
+        // #[test]
+        // fn test_timetz() {
+        //     let column_type = ColumnType::TimeTz;
+        //     let midnight = NaiveTime::from_hms_nano(0, 0, 0, 0);
+        //
+        //     let expected_outputs = vec!["05:30:15", "11:22:33", "17:15:16"];
+        //     let inputs: Vec<i64> = expected_outputs
+        //         .iter()
+        //         .map(|time_str| {
+        //             let time = NaiveTime::parse_from_str(time_str, "%H:%M:%S").unwrap();
+        //             let diff = time - midnight;
+        //             diff.num_microseconds().unwrap()
+        //         })
+        //         .collect();
+        //
+        //     let u_inputs = vec_i_into_u::<i64, u64>(inputs);
+        //
+        //     for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
+        //         let byte_vec = input.to_le_bytes().to_vec();
+        //         let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+        //
+        //         let output = column_type.format_value(&byte_vec_option, 0, &None);
+        //
+        //         assert_eq!(expected_output, output);
+        //     }
+        // }
+
+        #[test]
+        fn test_binary() {
+            let column_type = ColumnType::Binary;
+
+            let inputs: Vec<i64> = vec![1, 10, 123, 808080];
+            let expected_outputs = vec!["0x1", "0xA", "0x7B", "0x9054C"];
+            let u_inputs = vec_i_into_u::<i64, u64>(inputs);
+
+            for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = column_type.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(output, expected_output);
             }
         }
 
