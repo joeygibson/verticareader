@@ -513,6 +513,58 @@ mod tests {
             }
         }
 
+        #[test]
+        fn test_f64() {
+            let ct_int = ColumnType::Float;
+
+            let inputs: Vec<f64> = vec![-123456.123, -23.123, 0_f64, 123.23, 123456.123];
+
+            let expected_outputs = vec!["-123456.123", "-23.123", "0", "123.23", "123456.123"];
+
+            for (input, expected_output) in inputs.iter().zip(expected_outputs) {
+                let byte_vec = input.to_le_bytes().to_vec();
+                let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
+
+                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
+        #[test]
+        fn test_char() {
+            let ct_int = ColumnType::Char;
+
+            let inputs: Vec<u8> = vec!['a' as u8, 'A' as u8, 'z' as u8, 'Z' as u8];
+
+            let expected_outputs = vec!["a", "A", "z", "Z"];
+
+            for (input, expected_output) in inputs.iter().zip(expected_outputs) {
+                let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
+
+                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
+
+        #[test]
+        fn test_varchar() {
+            let ct_int = ColumnType::Varchar;
+
+            let inputs: Vec<&str> = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀"];
+
+            let expected_outputs = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀"];
+
+            for (input, expected_output) in inputs.iter().zip(expected_outputs) {
+                let bytes = input.as_bytes();
+                let byte_vec_option: Option<Vec<u8>> = Some(bytes.to_vec());
+
+                let output = ct_int.format_value(&byte_vec_option, 0, &None);
+
+                assert_eq!(expected_output, output);
+            }
+        }
         fn vec_i_into_u<T, U>(v: Vec<T>) -> Vec<U> {
             // Stolen from https://stackoverflow.com/a/59707887
             // and adapted to be generic
