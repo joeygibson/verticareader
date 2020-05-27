@@ -10,6 +10,7 @@ use vertica_native_file::VerticaNativeFile;
 
 mod column_conversion;
 mod column_definitions;
+mod column_type;
 mod column_types;
 mod file_signature;
 mod vertica_native_file;
