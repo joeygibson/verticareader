@@ -16,6 +16,28 @@ Options:
     -h, --help          display this help message
 ```
 
+At its simplest, `verticareader` will read in a Vertica native file, along with a
+file describing the column types and, optionally, names, and will output the file in
+human-readable CSV format to standard output. Any errors will go to standard error,
+so if you are planning on redirecting `stdout`, you should also redirect `stderr` with
+something like `2> errs.log`. 
+
+Using the [sample file from Vertica](https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/Example.htm)
+, to write to `stdout`, it can be run like this:
+
+```bash
+$ ./verticareader -t data/all-valid-types.txt data/all-types.bin
+1,-1.11,one,ONE,true,1999-01-08,1999-02-23 03:11:52.350,1999-01-08 12:04:37+00,07:09:23,15:12:34-05,0xABCD,0xABCD,1234532,03:03:03
+
+$
+```
+
+If you want to send the output to a file, instead of `stdout`, run it like this:
+
+```bash
+$ ./verticareader -t data/all-valid-types.txt -o all-types.csv data/all-types.bin
+```
+
 ## Type File Format
 
 The [Vertica native binary format](https://www.vertica.com/docs/9.2.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/CreatingNativeBinaryFormatFiles.htm)
