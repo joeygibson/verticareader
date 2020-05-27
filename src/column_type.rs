@@ -92,7 +92,11 @@ impl ColumnType {
                             }
                         };
 
-                        format!("{}", char_str.trim())
+                        if char_str.contains(",") {
+                            format!("\"{}\"", char_str.trim())
+                        } else {
+                            format!("{}", char_str.trim())
+                        }
                     }
                     ColumnType::Boolean => format!("{}", value[0] == 1u8),
                     ColumnType::Date => {
@@ -257,6 +261,7 @@ mod tests {
 
     mod format_tests {
         use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+
         use crate::column_type::ColumnType;
 
         #[test]
@@ -455,9 +460,10 @@ mod tests {
         fn test_varchar() {
             let column_type = ColumnType::Varchar;
 
-            let inputs: Vec<&str> = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀"];
+            let inputs: Vec<&str> = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀", "foo, bar, baz"];
 
-            let expected_outputs = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀"];
+            let expected_outputs =
+                vec!["a", "A", "z", "Z", "abc", "FOO", "🚀", "\"foo, bar, baz\""];
 
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let bytes = input.as_bytes();
