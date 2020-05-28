@@ -92,11 +92,7 @@ impl ColumnType {
                             }
                         };
 
-                        if char_str.contains(",") {
-                            format!("\"{}\"", char_str.trim())
-                        } else {
-                            format!("{}", char_str.trim())
-                        }
+                        format!("{}", char_str.trim())
                     }
                     ColumnType::Boolean => format!("{}", value[0] == 1u8),
                     ColumnType::Date => {

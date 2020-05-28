@@ -7,7 +7,6 @@ use crate::column_types::ColumnTypes;
 use crate::file_signature::FileSignature;
 use crate::{read_u32, read_u8, read_variable};
 
-// #[derive(Debug)]
 pub struct VerticaNativeFile<'a> {
     _signature: FileSignature,
     pub definitions: ColumnDefinitions,
