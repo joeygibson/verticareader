@@ -458,8 +458,7 @@ mod tests {
 
             let inputs: Vec<&str> = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀", "foo, bar, baz"];
 
-            let expected_outputs =
-                vec!["a", "A", "z", "Z", "abc", "FOO", "🚀", "\"foo, bar, baz\""];
+            let expected_outputs = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀", "foo, bar, baz"];
 
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let bytes = input.as_bytes();
