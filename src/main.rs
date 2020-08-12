@@ -16,23 +16,33 @@ fn main() {
     opts.optopt(
         "o",
         "output",
-        "output file name (defaults to stdout)",
+        "output file name (default is stdout)",
         "NAME",
     );
+
     opts.optopt(
         "t",
         "types",
         "file with list of column types, in order, one per line (optional names, separated by /)",
         "NAME",
     );
+
     opts.optopt(
         "z",
         "tz-offset",
         "offset hours for times without TZ",
         "+/-HOURS",
     );
-    opts.optflag("h", "help", "display this help message");
 
+    opts.optopt(
+        "d",
+        "delimiter",
+        "field delimiter (default is ,)",
+        "DELIMITER",
+    );
+
+    opts.optflag("s", "single-quotes", "use ' for quoting (default is \")");
+    opts.optflag("h", "help", "display this help message");
     opts.optflag("v", "version", "display the program version");
 
     let matches = match opts.parse(&args[1..]) {
@@ -69,8 +79,18 @@ fn main() {
     }
 
     let tz_offset = matches.opt_str("z");
+    let quote = if matches.opt_present("s") {
+        b'\''
+    } else {
+        b'"'
+    };
 
-    match process_file(input, output, types.unwrap(), tz_offset) {
+    let delimiter = match matches.opt_str("d") {
+        None => b',',
+        Some(d) => d.as_bytes()[0],
+    };
+
+    match process_file(input, output, types.unwrap(), tz_offset, quote, delimiter) {
         Ok(_) => {}
         Err(e) => eprintln!("Error: {}", e),
     }

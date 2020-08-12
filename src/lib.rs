@@ -55,6 +55,8 @@ pub fn process_file(
     output: Option<String>,
     types: String,
     tz_offset: Option<String>,
+    quote: u8,
+    delimiter: u8,
 ) -> Result<(), String> {
     if !Path::new(input.as_str()).exists() {
         return Err(format!("input file {} does not exist", input));
@@ -89,7 +91,10 @@ pub fn process_file(
         Box::new(stdout())
     });
 
-    let mut csv_writer = csv::Writer::from_writer(writer);
+    let mut csv_writer = csv::WriterBuilder::new()
+        .delimiter(delimiter)
+        .quote(quote)
+        .from_writer(writer);
 
     let tz_offset = match tz_offset {
         None => 0i8,

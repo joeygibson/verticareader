@@ -10,11 +10,17 @@ and output them in a CSV format.
 Usage: verticareader FILE [options]
 
 Options:
-    -o, --output NAME   output file name (defaults to stdout)
-    -t, --types NAME    file with list of column types, in order, one per line (optional names, separated by /)
+    -o, --output NAME   output file name (default is stdout)
+    -t, --types NAME    file with list of column types, in order, one per line
+                        (optional names, separated by /)
     -z, --tz-offset +/-HOURS
                         offset hours for times without TZ
+    -d, --delimiter DELIMITER
+                        field delimiter (default is ,)
+    -s, --single-quotes
+                        use \' for quoting (default is \")
     -h, --help          display this help message
+    -v, --version       display the program version
 ```
 
 At its simplest, `verticareader` will read in a Vertica native file, along with a
