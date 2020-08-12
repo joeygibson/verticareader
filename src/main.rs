@@ -1,12 +1,16 @@
 use std::env;
+use std::path::Path;
 
 use getopts::Options;
 
 use verticareader::process_file;
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let program = args[0].clone();
+    let path_to_program = Path::new(args[0].as_str());
+    let program = path_to_program.file_name().unwrap().to_str().unwrap();
 
     let mut opts = Options::new();
     opts.optopt(
@@ -29,10 +33,17 @@ fn main() {
     );
     opts.optflag("h", "help", "display this help message");
 
+    opts.optflag("v", "version", "display the program version");
+
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => panic!(f.to_string()),
     };
+
+    if matches.opt_present("v") {
+        println!("{} v{}", program, VERSION);
+        return;
+    }
 
     if matches.opt_present("h") {
         print_usage(&program, opts);
@@ -66,7 +77,10 @@ fn main() {
 }
 
 fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} FILE [options]", program);
+    let brief = format!(
+        "{} v{}\nUsage: {} FILE [options]",
+        program, VERSION, program
+    );
 
     println!("{}", opts.usage(&brief));
 }
