@@ -17,8 +17,9 @@ Options:
                         offset hours for times without TZ
     -d, --delimiter DELIMITER
                         field delimiter (default is ,)
+    -n, --no-header     don't include column header row
     -s, --single-quotes
-                        use \' for quoting (default is \")
+                        use ' for quoting (default is ")
     -h, --help          display this help message
     -v, --version       display the program version
 ```

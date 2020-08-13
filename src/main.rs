@@ -41,6 +41,7 @@ fn main() {
         "DELIMITER",
     );
 
+    opts.optflag("n", "no-header", "don't include column header row");
     opts.optflag("s", "single-quotes", "use ' for quoting (default is \")");
     opts.optflag("h", "help", "display this help message");
     opts.optflag("v", "version", "display the program version");
@@ -90,7 +91,17 @@ fn main() {
         Some(d) => d.as_bytes()[0],
     };
 
-    match process_file(input, output, types.unwrap(), tz_offset, quote, delimiter) {
+    let no_header = matches.opt_present("n");
+
+    match process_file(
+        input,
+        output,
+        types.unwrap(),
+        tz_offset,
+        quote,
+        delimiter,
+        no_header,
+    ) {
         Ok(_) => {}
         Err(e) => eprintln!("Error: {}", e),
     }

@@ -57,6 +57,7 @@ pub fn process_file(
     tz_offset: Option<String>,
     quote: u8,
     delimiter: u8,
+    no_header: bool,
 ) -> Result<(), String> {
     if !Path::new(input.as_str()).exists() {
         return Err(format!("input file {} does not exist", input));
@@ -101,8 +102,10 @@ pub fn process_file(
         Some(s) => i8::from_str(&s).unwrap_or(0i8),
     };
 
-    if !&types.column_names.iter().all(|n| n == "") {
-        &csv_writer.write_record(&types.column_names[..]);
+    if !no_header {
+        if !&types.column_names.iter().all(|n| n == "") {
+            &csv_writer.write_record(&types.column_names[..]);
+        }
     }
 
     for row in native_file {
