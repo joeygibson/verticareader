@@ -94,7 +94,7 @@ impl ColumnType {
 
                         format!("{}", char_str.trim())
                     }
-                    ColumnType::Boolean => format!("{}", value[0] == 1u8),
+                    ColumnType::Boolean => format!("{}", value[0]),
                     ColumnType::Date => {
                         let bytes = &value[..];
                         let julian_date_offset =
@@ -476,7 +476,7 @@ mod tests {
 
             let inputs: Vec<u8> = vec![1, 0];
 
-            let expected_outputs = vec!["true", "false"];
+            let expected_outputs = vec!["1", "0"];
 
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
