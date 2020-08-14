@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+ARCH=$(uname -m | tr '[:upper:]' '[:lower:]')
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+if [[ "${OS}" == "darwin" ]]; then
+    VENDOR="apple"
+else
+    VENDOR="unknown"
+fi
+
+mv target/debug/verticareader target/verticareader-${TRAVIS_TAG}-${ARCH}-${VENDOR}-${OS}
+
