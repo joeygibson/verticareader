@@ -1,0 +1,59 @@
+name: release
+on:
+  push:
+    tags:
+      - 'v[0-9]+.*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create_release:
+    name: Create release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+  release_assets:
+    name: Release assets
+    needs: create_release
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      matrix:
+        config:
+          - os: ubuntu-latest
+          - os: macOS-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v1
+      - name: Build and test
+        run: cargo test --verbose
+      - name: Build for release
+        run: cargo build --verbose --release
+      - name: Set program name
+        run: echo "PROGRAM_NAME=${GITHUB_REPOSITORY#joeygibson/}" >> $GITHUB_ENV
+      - name: Generate binary name
+        run: ./scripts/generate-binary-name
+        env: 
+          OS: ${{ matrix.config.os }}
+      - name: Set permissions
+        run: chmod 755 target/release/${{ env.PROGRAM_NAME }}
+      - name: Upload release assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_name: ${{ env.RELEASE_NAME }}
+          asset_path: target/release/${{ env.PROGRAM_NAME }}
+          asset_content_type: application/octet-stream
