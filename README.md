@@ -1,5 +1,6 @@
 # Vertica Reader
-[![Build Status](https://travis-ci.org/joeygibson/verticareader.svg?branch=master)](https://travis-ci.org/joeygibson/verticareader)
+![Build Status](https://github.com/joeygibson/verticareader/workflows/build/badge.svg)
+![Release Status](https://github.com/joeygibson/verticareader/workflows/release/badge.svg)
 
 A tool to read [Vertica native binary files](https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/CreatingNativeBinaryFormatFiles.htm)
 and output them in a CSV format. 
