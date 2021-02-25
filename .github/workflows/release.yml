@@ -6,7 +6,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-
+  
 jobs:
   create_release:
     name: Create release
@@ -33,21 +33,22 @@ jobs:
         config:
           - os: ubuntu-latest
           - os: macOS-latest
+          - os: windows-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
       - name: Build and test
         run: cargo test --verbose
       - name: Build for release
         run: cargo build --verbose --release
-      - name: Set program name
-        run: echo "PROGRAM_NAME=${GITHUB_REPOSITORY#joeygibson/}" >> $GITHUB_ENV
       - name: Generate binary name
         run: ./scripts/generate-binary-name
+        shell: bash
         env: 
           OS: ${{ matrix.config.os }}
       - name: Set permissions
-        run: chmod 755 target/release/${{ env.PROGRAM_NAME }}
+        run: chmod 755 ${{ env.PROGRAM_NAME }}
+        shell: bash
       - name: Upload release assets
         uses: actions/upload-release-asset@v1
         env:
@@ -55,5 +56,5 @@ jobs:
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_name: ${{ env.RELEASE_NAME }}
-          asset_path: target/release/${{ env.PROGRAM_NAME }}
+          asset_path: ${{ env.PROGRAM_NAME }}
           asset_content_type: application/octet-stream
