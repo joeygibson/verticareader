@@ -13,21 +13,21 @@ fn main() {
         .arg(
             Arg::with_name("input")
                 .takes_value(true)
-                .help("the file to process")
+                .help("The file to process")
         )
         .arg(
             Arg::with_name("output")
                 .takes_value(true)
                 .short("o")
                 .long("output")
-                .help("output file name [default: stdout]")
+                .help("Output file name [default: stdout]")
         )
         .arg(
             Arg::with_name("types")
                 .takes_value(true)
                 .short("t")
                 .long("types")
-                .help("file with list of column types, in order, one per line (optional names, separated by /)")
+                .help("File with list of column types, names, and conversions")
         )
         .arg(
             Arg::with_name("tz-offset")
@@ -42,21 +42,21 @@ fn main() {
                 .default_value(",")
                 .short("d")
                 .long("delimiter")
-                .help("field delimiter")
+                .help("Field delimiter")
         )
         .arg(
             Arg::with_name("no-header")
                 .takes_value(false)
                 .short("n")
                 .long("no-header")
-                .help("don't include column header row")
+                .help("Don't include column header row")
         )
         .arg(
             Arg::with_name("single-quotes")
                 .takes_value(false)
                 .short("s")
                 .long("single-quotes")
-                .help("use ' for quoting")
+                .help("Use ' for quoting")
         );
 
     let args = app.get_matches();

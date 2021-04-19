@@ -8,21 +8,23 @@ and output them in a CSV format.
 ## Usage
 
 ```bash
-Usage: verticareader FILE [options]
+USAGE:
+    verticareader [FLAGS] [OPTIONS] [input]
 
-Options:
-    -o, --output NAME   output file name (default is stdout)
-    -t, --types NAME    file with list of column types, in order, one per line
-                        (optional names, separated by /)
-    -z, --tz-offset +/-HOURS
-                        offset hours for times without TZ
-    -d, --delimiter DELIMITER
-                        field delimiter (default is ,)
-    -n, --no-header     don't include column header row
-    -s, --single-quotes
-                        use ' for quoting (default is ")
-    -h, --help          display this help message
-    -v, --version       display the program version
+FLAGS:
+    -h, --help             Prints help information
+    -n, --no-header        Don't include column header row
+    -s, --single-quotes    Use ' for quoting
+    -V, --version          Prints version information
+
+OPTIONS:
+    -d, --delimiter <delimiter>    Field delimiter [default: ,]
+    -o, --output <output>          Output file name [default: stdout]
+    -t, --types <types>            File with list of column types, names, and conversions
+    -z, --tz-offset <tz-offset>    +/- hours
+
+ARGS:
+    <input>    The file to process
 ```
 
 At its simplest, `verticareader` will read in a Vertica native file, along with a
