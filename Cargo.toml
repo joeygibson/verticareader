@@ -1,6 +1,6 @@
 [package]
 name = "verticareader"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Joey Gibson <joey@joeygibson.com>"]
 edition = "2018"
 description = "A program to read Vertica native binary files and convert them to CSV."
@@ -13,7 +13,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-getopts = "0.2"
+clap = "2"
 chrono = "0.4"
 csv = "1.1"
 regex = "1"

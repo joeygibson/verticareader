@@ -52,9 +52,9 @@ fn read_u8(reader: &mut impl Read) -> io::Result<u8> {
 
 pub fn process_file(
     input: String,
-    output: Option<String>,
+    output: Option<&str>,
     types: String,
-    tz_offset: Option<String>,
+    tz_offset: Option<&str>,
     quote: u8,
     delimiter: u8,
     no_header: bool,

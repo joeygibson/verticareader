@@ -1,117 +1,101 @@
 use std::env;
-use std::path::Path;
 
-use getopts::Options;
+use clap::{App, Arg};
 
 use verticareader::process_file;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let path_to_program = Path::new(args[0].as_str());
-    let program = path_to_program.file_name().unwrap().to_str().unwrap();
+    let app = App::new("verticareader")
+        .version(VERSION)
+        .about("read Vertica native binary files")
+        .arg(
+            Arg::with_name("input")
+                .takes_value(true)
+                .help("the file to process")
+        )
+        .arg(
+            Arg::with_name("output")
+                .takes_value(true)
+                .short("o")
+                .long("output")
+                .help("output file name [default: stdout]")
+        )
+        .arg(
+            Arg::with_name("types")
+                .takes_value(true)
+                .short("t")
+                .long("types")
+                .help("file with list of column types, in order, one per line (optional names, separated by /)")
+        )
+        .arg(
+            Arg::with_name("tz-offset")
+                .takes_value(true)
+                .short("z")
+                .long("tz-offset")
+                .help("+/- hours")
+        )
+        .arg(
+            Arg::with_name("delimiter")
+                .takes_value(true)
+                .default_value(",")
+                .short("d")
+                .long("delimiter")
+                .help("field delimiter")
+        )
+        .arg(
+            Arg::with_name("no-header")
+                .takes_value(false)
+                .short("n")
+                .long("no-header")
+                .help("don't include column header row")
+        )
+        .arg(
+            Arg::with_name("single-quotes")
+                .takes_value(false)
+                .short("s")
+                .long("single-quotes")
+                .help("use ' for quoting")
+        );
 
-    let mut opts = Options::new();
-    opts.optopt(
-        "o",
-        "output",
-        "output file name (default is stdout)",
-        "NAME",
-    );
+    let args = app.get_matches();
 
-    opts.optopt(
-        "t",
-        "types",
-        "file with list of column types, in order, one per line (optional names, separated by /)",
-        "NAME",
-    );
-
-    opts.optopt(
-        "z",
-        "tz-offset",
-        "offset hours for times without TZ",
-        "+/-HOURS",
-    );
-
-    opts.optopt(
-        "d",
-        "delimiter",
-        "field delimiter (default is ,)",
-        "DELIMITER",
-    );
-
-    opts.optflag("n", "no-header", "don't include column header row");
-    opts.optflag("s", "single-quotes", "use ' for quoting (default is \")");
-    opts.optflag("h", "help", "display this help message");
-    opts.optflag("v", "version", "display the program version");
-
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => m,
-        Err(f) => panic!(f.to_string()),
+    let input = match args.value_of("input") {
+        Some(filename) => String::from(filename),
+        None => {
+            eprintln!("no input file given\n");
+            return;
+        }
     };
 
-    if matches.opt_present("v") {
-        println!("{} v{}", program, VERSION);
-        return;
-    }
+    let output = args.value_of("output");
 
-    if matches.opt_present("h") {
-        print_usage(&program, opts);
-        return;
-    }
-
-    let output = matches.opt_str("o");
-
-    let input = if !matches.free.is_empty() {
-        matches.free[0].clone()
-    } else {
-        eprintln!("no input file given");
-        print_usage(&program, opts);
-        return;
+    let types = match args.value_of("types") {
+        Some(filename) => String::from(filename),
+        None => {
+            eprintln!("no column types file given\n");
+            return;
+        }
     };
 
-    let types = matches.opt_str("t");
+    let tz_offset = args.value_of("tz-offset");
 
-    if types.is_none() {
-        eprintln!("no column types file given");
-        print_usage(&program, opts);
-        return;
-    }
-
-    let tz_offset = matches.opt_str("z");
-    let quote = if matches.opt_present("s") {
+    let quote = if args.is_present("single-quotes") {
         b'\''
     } else {
         b'"'
     };
 
-    let delimiter = match matches.opt_str("d") {
+    let delimiter = match args.value_of("delimiter") {
         None => b',',
         Some(d) => d.as_bytes()[0],
     };
 
-    let no_header = matches.opt_present("n");
+    let no_header = args.is_present("no-header");
 
-    match process_file(
-        input,
-        output,
-        types.unwrap(),
-        tz_offset,
-        quote,
-        delimiter,
-        no_header,
-    ) {
+    match process_file(input, output, types, tz_offset, quote, delimiter, no_header) {
         Ok(_) => {}
         Err(e) => eprintln!("Error: {}", e),
     }
-}
-
-fn print_usage(program: &str, opts: Options) {
-    let brief = format!(
-        "{} v{}\nUsage: {} FILE [options]",
-        program, VERSION, program
-    );
-
-    println!("{}", opts.usage(&brief));
 }
