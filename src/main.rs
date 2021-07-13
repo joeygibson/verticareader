@@ -1,6 +1,6 @@
 use std::env;
 
-use clap::{App, Arg};
+use clap::{App, AppSettings, Arg};
 
 use verticareader::process_file;
 
@@ -10,53 +10,53 @@ fn main() {
     let app = App::new("verticareader")
         .version(VERSION)
         .about("read Vertica native binary files")
+        .setting(AppSettings::ArgRequiredElseHelp)
         .arg(
             Arg::with_name("input")
                 .takes_value(true)
-                .help("The file to process")
+                .help("The file to process"),
         )
         .arg(
             Arg::with_name("output")
                 .takes_value(true)
                 .short("o")
                 .long("output")
-                .help("Output file name [default: stdout]")
+                .help("Output file name [default: stdout]"),
         )
         .arg(
             Arg::with_name("types")
                 .takes_value(true)
                 .short("t")
                 .long("types")
-                .help("File with list of column types, names, and conversions")
+                .help("File with list of column types, names, and conversions"),
         )
         .arg(
             Arg::with_name("tz-offset")
                 .takes_value(true)
                 .short("z")
                 .long("tz-offset")
-                .help("+/- hours")
+                .help("+/- hours"),
         )
         .arg(
             Arg::with_name("delimiter")
                 .takes_value(true)
-                .default_value(",")
                 .short("d")
                 .long("delimiter")
-                .help("Field delimiter")
+                .help("Field delimiter [default: ,]"),
         )
         .arg(
             Arg::with_name("no-header")
                 .takes_value(false)
                 .short("n")
                 .long("no-header")
-                .help("Don't include column header row")
+                .help("Don't include column header row"),
         )
         .arg(
             Arg::with_name("single-quotes")
                 .takes_value(false)
                 .short("s")
                 .long("single-quotes")
-                .help("Use ' for quoting")
+                .help("Use ' for quoting"),
         );
 
     let args = app.get_matches();
