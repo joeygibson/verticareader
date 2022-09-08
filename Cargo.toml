@@ -1,6 +1,6 @@
 [package]
 name = "verticareader"
-version = "1.1.1"
+version = "1.1.2"
 authors = ["Joey Gibson <joey@joeygibson.com>"]
 edition = "2018"
 description = "A program to read Vertica native binary files and convert them to CSV."
@@ -16,5 +16,5 @@ publish = false
 clap = "2"
 chrono = "0.4"
 csv = "1.1"
-regex = "1"
+regex = "1.6"
 lazy_static = "1.4.0"
