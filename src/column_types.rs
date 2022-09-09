@@ -56,6 +56,10 @@ impl ColumnTypes {
             column_conversions,
         })
     }
+
+    pub fn has_names(&self) -> bool {
+        return self.column_names.iter().all(|n| n != "");
+    }
 }
 
 #[cfg(test)]

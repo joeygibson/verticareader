@@ -12,6 +12,7 @@ const VALID_FILE_SIGNATURE_BYTES: [u8; 11] = [
 ];
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct FileSignature {
     data: [u8; 11],
 }

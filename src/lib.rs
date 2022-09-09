@@ -58,6 +58,7 @@ pub fn process_file(
     quote: u8,
     delimiter: u8,
     no_header: bool,
+    is_json: bool,
 ) -> Result<(), String> {
     if !Path::new(input.as_str()).exists() {
         return Err(format!("input file {} does not exist", input));
@@ -77,34 +78,62 @@ pub fn process_file(
         }
     };
 
-    let native_file = match VerticaNativeFile::from_reader(&mut input_file) {
-        Ok(i) => i,
-        Err(e) => return Err(e.to_string()),
-    };
-
-    let writer: BufWriter<Box<dyn Write>> = BufWriter::new(if let Some(filename) = output {
-        if filename == input {
-            return Err("can't overwrite input file".to_string());
-        }
-
-        Box::new(File::create(filename).unwrap())
-    } else {
-        Box::new(stdout())
-    });
-
-    let mut csv_writer = csv::WriterBuilder::new()
-        .delimiter(delimiter)
-        .quote(quote)
-        .from_writer(writer);
-
     let tz_offset = match tz_offset {
         None => 0i8,
         Some(s) => i8::from_str(&s).unwrap_or(0i8),
     };
 
+    let native_file = match VerticaNativeFile::from_reader(&mut input_file) {
+        Ok(i) => i,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    let mut base_writer: BufWriter<Box<dyn Write>> =
+        BufWriter::new(if let Some(filename) = output {
+            if filename == input {
+                return Err("can't overwrite input file".to_string());
+            }
+
+            Box::new(File::create(filename).unwrap())
+        } else {
+            Box::new(stdout())
+        });
+
+    return if is_json {
+        process_json_file(native_file, &mut base_writer, types, tz_offset)
+    } else {
+        process_csv_file(
+            native_file,
+            base_writer,
+            types,
+            tz_offset,
+            quote,
+            delimiter,
+            no_header,
+        )
+    };
+}
+
+fn process_csv_file(
+    native_file: VerticaNativeFile,
+    writer: BufWriter<Box<dyn Write>>,
+    types: ColumnTypes,
+    tz_offset: i8,
+    quote: u8,
+    delimiter: u8,
+    no_header: bool,
+) -> Result<(), String> {
+    let mut csv_writer = csv::WriterBuilder::new()
+        .delimiter(delimiter)
+        .quote(quote)
+        .from_writer(writer);
+
     if !no_header {
-        if !&types.column_names.iter().all(|n| n == "") {
-            &csv_writer.write_record(&types.column_names[..]);
+        if types.has_names() {
+            match csv_writer.write_record(&types.column_names[..]) {
+                Ok(_) => {}
+                Err(e) => eprintln!("error writing CSV header: {}", e),
+            }
         }
     }
 
@@ -119,4 +148,260 @@ pub fn process_file(
     }
 
     Ok(())
+}
+
+fn process_json_file(
+    native_file: VerticaNativeFile,
+    writer: &mut BufWriter<Box<dyn Write>>,
+    types: ColumnTypes,
+    tz_offset: i8,
+) -> Result<(), String> {
+    if !types.has_names() {
+        return Err("JSON files require column names in types file".to_string());
+    }
+
+    for row in native_file {
+        match row.generate_json_output(&types, tz_offset) {
+            Ok(record) => match writer.write_all(record.as_bytes()) {
+                Ok(_) => {}
+                Err(e) => eprintln!("error: {}", e),
+            },
+            Err(e) => eprintln!("error: {}", e),
+        }
+    }
+
+    return Ok(());
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env::temp_dir;
+    use std::fs::File;
+    use std::path::Path;
+    use std::{fs, panic};
+
+    use csv::StringRecord;
+    use serde_json::Value;
+    use uuid::Uuid;
+
+    use crate::process_file;
+
+    #[test]
+    fn test_csv_file_with_no_headers() {
+        let output_file_name = format!(
+            "{}/{}.csv",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types.bin");
+        let types_file_name = String::from("data/all-valid-types.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                false,
+            );
+
+            assert!(result.is_ok());
+
+            let f = File::open(&output_file_name).unwrap();
+
+            let mut csv_file = csv::ReaderBuilder::new().has_headers(false).from_reader(f);
+
+            let records: Vec<StringRecord> = csv_file.records().map(|r| r.unwrap()).collect();
+
+            assert!(!csv_file.has_headers());
+            assert_eq!(records.len(), 1_usize);
+
+            assert_eq!(records[0].len(), 14_usize);
+            assert_eq!(records[0][0].to_string(), "1");
+            assert_eq!(records[0][5].to_string(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_csv_file_with_headers() {
+        let output_file_name = format!(
+            "{}/{}.csv",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types.bin");
+        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                false,
+            );
+
+            assert!(result.is_ok());
+
+            let f = File::open(&output_file_name).unwrap();
+
+            let mut csv_file = csv::ReaderBuilder::new().has_headers(true).from_reader(f);
+
+            let records: Vec<StringRecord> = csv_file.records().map(|r| r.unwrap()).collect();
+
+            assert!(csv_file.has_headers());
+            assert_eq!(records.len(), 1_usize);
+
+            assert_eq!(records[0].len(), 14_usize);
+            assert_eq!(records[0][0].to_string(), "1");
+            assert_eq!(records[0][5].to_string(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_csv_file_with_headers_but_turned_off() {
+        let output_file_name = format!(
+            "{}/{}.csv",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types.bin");
+        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                true,
+                false,
+            );
+
+            assert!(result.is_ok());
+
+            let f = File::open(&output_file_name).unwrap();
+
+            let mut csv_file = csv::ReaderBuilder::new().has_headers(false).from_reader(f);
+
+            let records: Vec<StringRecord> = csv_file.records().map(|r| r.unwrap()).collect();
+
+            assert!(!csv_file.has_headers());
+            assert_eq!(records.len(), 1_usize);
+
+            assert_eq!(records[0].len(), 14_usize);
+            assert_eq!(records[0][0].to_string(), "1");
+            assert_eq!(records[0][5].to_string(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_json_file_with_missing_column_names() {
+        let output_file_name = format!(
+            "{}/{}.json",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types.bin");
+        let types_file_name = String::from("data/all-valid-types.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                true,
+            );
+
+            assert!(result.is_err());
+            assert_eq!(
+                result.err().unwrap(),
+                "JSON files require column names in types file".to_string()
+            );
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_json_file() {
+        let output_file_name = format!(
+            "{}/{}.json",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types.bin");
+        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                true,
+            );
+
+            assert!(result.is_ok());
+            let f = File::open(&output_file_name).unwrap();
+
+            let contents: Value = serde_json::from_reader(f).unwrap();
+            
+            assert_eq!(contents["IntCol"].as_i64().unwrap(), 1);
+            assert_eq!(contents["The_Date"].as_str().unwrap(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
 }

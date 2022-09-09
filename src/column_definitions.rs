@@ -4,6 +4,7 @@ use std::io::Result;
 use crate::{read_u16, read_u32, read_u8};
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct ColumnDefinitions {
     header_length: u32,
     version: u16,

@@ -8,23 +8,24 @@ and output them in a CSV format.
 ## Usage
 
 ```bash
+convert Vertica native binary files to CSV/JSON
+
 USAGE:
-    verticareader [FLAGS] [OPTIONS] [input]
-
-FLAGS:
-    -h, --help             Prints help information
-    -n, --no-header        Don't include column header row
-    -s, --single-quotes    Use ' for quoting
-    -V, --version          Prints version information
-
-OPTIONS:
-    -d, --delimiter <delimiter>    Field delimiter [default: ,]
-    -o, --output <output>          Output file name [default: stdout]
-    -t, --types <types>            File with list of column types, names, and conversions
-    -z, --tz-offset <tz-offset>    +/- hours
+    verticareader [OPTIONS] --types <types> [input]
 
 ARGS:
     <input>    The file to process
+
+OPTIONS:
+    -d, --delimiter <delimiter>    Field delimiter for CSV file [default: ,]
+    -h, --help                     Print help information
+    -j, --json                     Output in JSON format [default: CSV]
+    -n, --no-header                Don't include column header row in CSV file
+    -o, --output <output>          Output file name [default: stdout]
+    -s, --single-quotes            Use ' for quoting in CSV file
+    -t, --types <types>            File with list of column types, names, and conversions
+    -V, --version                  Print version information
+    -z, --tz-offset <tz-offset>    +/- hours
 ```
 
 At its simplest, `verticareader` will read in a Vertica native file, along with a
