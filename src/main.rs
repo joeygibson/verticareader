@@ -9,7 +9,7 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 fn main() {
     let app = App::new("verticareader")
         .version(VERSION)
-        .about("read Vertica native binary files")
+        .about("convert Vertica native binary files to CSV/JSON")
         .setting(AppSettings::ArgRequiredElseHelp)
         .arg(
             Arg::with_name("input")
@@ -19,44 +19,52 @@ fn main() {
         .arg(
             Arg::with_name("output")
                 .takes_value(true)
-                .short("o")
+                .short('o')
                 .long("output")
                 .help("Output file name [default: stdout]"),
         )
         .arg(
             Arg::with_name("types")
+                .required(true)
                 .takes_value(true)
-                .short("t")
+                .short('t')
                 .long("types")
                 .help("File with list of column types, names, and conversions"),
         )
         .arg(
             Arg::with_name("tz-offset")
                 .takes_value(true)
-                .short("z")
+                .short('z')
                 .long("tz-offset")
                 .help("+/- hours"),
         )
         .arg(
             Arg::with_name("delimiter")
                 .takes_value(true)
-                .short("d")
+                .short('d')
                 .long("delimiter")
-                .help("Field delimiter [default: ,]"),
+                .help("Field delimiter for CSV file [default: ,]"),
         )
         .arg(
             Arg::with_name("no-header")
                 .takes_value(false)
-                .short("n")
+                .short('n')
                 .long("no-header")
-                .help("Don't include column header row"),
+                .help("Don't include column header row in CSV file"),
         )
         .arg(
             Arg::with_name("single-quotes")
                 .takes_value(false)
-                .short("s")
+                .short('s')
                 .long("single-quotes")
-                .help("Use ' for quoting"),
+                .help("Use ' for quoting in CSV file"),
+        )
+        .arg(
+            Arg::with_name("json")
+                .takes_value(false)
+                .short('j')
+                .long("json")
+                .help("Output in JSON format [default: CSV]"),
         );
 
     let args = app.get_matches();
@@ -93,8 +101,11 @@ fn main() {
     };
 
     let no_header = args.is_present("no-header");
+    let is_json = args.is_present("json");
 
-    match process_file(input, output, types, tz_offset, quote, delimiter, no_header) {
+    match process_file(
+        input, output, types, tz_offset, quote, delimiter, no_header, is_json,
+    ) {
         Ok(_) => {}
         Err(e) => eprintln!("Error: {}", e),
     }

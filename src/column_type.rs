@@ -533,7 +533,7 @@ mod tests {
                 .map(|date_str| {
                     let date = match NaiveDateTime::parse_from_str(*date_str, "%Y-%m-%d %H:%M:%S") {
                         Ok(d) => d,
-                        Err(e) => panic!(e),
+                        Err(e) => panic!("{}", e),
                     };
 
                     let diff = date.signed_duration_since(vertica_epoch_date);
@@ -581,7 +581,7 @@ mod tests {
                     let date = match NaiveDateTime::parse_from_str(*date_str, "%Y-%m-%d %H:%M:%S%z")
                     {
                         Ok(d) => d,
-                        Err(e) => panic!(e),
+                        Err(e) => panic!("{}", e),
                     };
 
                     let diff = date.signed_duration_since(vertica_epoch_date);

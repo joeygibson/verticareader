@@ -1,8 +1,12 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 
+use serde_json::{Number, Value};
+
 use crate::column_definitions::ColumnDefinitions;
+use crate::column_type::ColumnType;
 use crate::column_types::ColumnTypes;
 use crate::file_signature::FileSignature;
 use crate::{read_u32, read_u8, read_variable};
@@ -47,6 +51,7 @@ impl<'a> Iterator for VerticaNativeFile<'a> {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct Row {
     null_values: Vec<bool>,
     data: Vec<Option<Vec<u8>>>,
@@ -122,6 +127,54 @@ impl Row {
         }
 
         Ok(record)
+    }
+
+    pub fn generate_json_output(
+        &self,
+        types: &ColumnTypes,
+        tz_offset: i8,
+    ) -> Result<String, Box<dyn Error>> {
+        let mut record = HashMap::new();
+
+        for (index, column) in self.data.iter().enumerate() {
+            let column_conversion = &types.column_conversions[index];
+
+            let name = types.column_names[index].clone();
+            let value =
+                types.column_types[index].format_value(column, tz_offset, column_conversion);
+
+            let mapped_value = match types.column_types[index] {
+                ColumnType::Integer | ColumnType::Numeric => {
+                    if value.is_empty() {
+                        Value::Null
+                    } else {
+                        let num = value.parse::<i64>().unwrap();
+                        Value::Number(Number::from(num))
+                    }
+                }
+                ColumnType::Float => {
+                    let num = value.parse::<f64>().unwrap();
+                    Value::Number(Number::from_f64(num).unwrap())
+                }
+                ColumnType::Char
+                | ColumnType::Varchar
+                | ColumnType::Date
+                | ColumnType::Timestamp
+                | ColumnType::TimestampTz
+                | ColumnType::Time
+                | ColumnType::TimeTz
+                | ColumnType::Varbinary
+                | ColumnType::Binary
+                | ColumnType::Interval => Value::String(value),
+                ColumnType::Boolean => Value::Bool(value == "true"),
+            };
+
+            record.insert(name, mapped_value);
+        }
+
+        let str_record = serde_json::to_string(&record).unwrap();
+
+        Ok(str_record)
     }
 }
 
