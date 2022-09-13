@@ -8,6 +8,8 @@ use std::str::FromStr;
 use column_types::ColumnTypes;
 use vertica_native_file::VerticaNativeFile;
 
+use crate::column_type::ColumnType;
+
 mod column_conversion;
 mod column_definitions;
 mod column_type;
@@ -55,6 +57,7 @@ pub fn process_file(
     delimiter: u8,
     no_header: bool,
     is_json: bool,
+    is_parquet: bool,
 ) -> Result<(), String> {
     if !Path::new(input.as_str()).exists() {
         return Err(format!("input file {} does not exist", input));
@@ -97,6 +100,8 @@ pub fn process_file(
 
     return if is_json {
         process_json_file(native_file, &mut base_writer, types, tz_offset)
+    } else if is_parquet {
+        process_parquet_file(native_file, &mut base_writer, types, tz_offset)
     } else {
         process_csv_file(
             native_file,
@@ -169,6 +174,57 @@ fn process_json_file(
     return Ok(());
 }
 
+fn process_parquet_file(
+    native_file: VerticaNativeFile,
+    writer: &mut BufWriter<Box<dyn Write>>,
+    types: ColumnTypes,
+    tz_offset: i8,
+) -> Result<(), String> {
+    if !types.has_names() {
+        return Err("Parquet files require column names in types file".to_string());
+    }
+
+    let schema = generate_parquet_schema(&types);
+
+    for row in native_file {
+        match row.generate_json_output(&types, tz_offset) {
+            Ok(record) => match writer.write_all(record.as_bytes()) {
+                Ok(_) => {}
+                Err(e) => eprintln!("error: {}", e),
+            },
+            Err(e) => eprintln!("error: {}", e),
+        }
+    }
+
+    return Ok(());
+}
+
+fn generate_parquet_schema(types: &ColumnTypes) -> String {
+    let mut schema: Vec<String> = vec!["message schema {".to_string()];
+
+    for (index, t) in types.column_types.iter().enumerate() {
+        let mapped_value = match t {
+            ColumnType::Integer | ColumnType::Numeric => "int(64, true)",
+            ColumnType::Float => "float",
+            ColumnType::Char => "char",
+            ColumnType::Timestamp | ColumnType::TimestampTz => "timestamp",
+            ColumnType::Date => "date",
+            ColumnType::Time | ColumnType::TimeTz => "time",
+            ColumnType::Varchar => "string",
+            ColumnType::Varbinary | ColumnType::Binary => "byte_array",
+            ColumnType::Interval => "interval",
+            ColumnType::Boolean => "boolean",
+        };
+
+        let mapping = format!("optional {} {}", mapped_value, types.column_names[index]);
+        schema.push(mapping);
+    }
+
+    schema.push("}".to_string());
+
+    return schema.join("");
+}
+
 #[cfg(test)]
 mod tests {
     use std::env::temp_dir;
@@ -201,6 +257,7 @@ mod tests {
                 None,
                 b'"',
                 b',',
+                false,
                 false,
                 false,
             );
@@ -250,6 +307,7 @@ mod tests {
                 b',',
                 false,
                 false,
+                false,
             );
 
             assert!(result.is_ok());
@@ -296,6 +354,7 @@ mod tests {
                 b'"',
                 b',',
                 true,
+                false,
                 false,
             );
 
@@ -344,6 +403,7 @@ mod tests {
                 b',',
                 false,
                 true,
+                false,
             );
 
             assert!(result.is_err());
@@ -382,6 +442,7 @@ mod tests {
                 b',',
                 false,
                 true,
+                false,
             );
 
             assert!(result.is_ok());

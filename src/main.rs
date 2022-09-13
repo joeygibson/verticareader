@@ -65,6 +65,13 @@ fn main() {
                 .short('j')
                 .long("json")
                 .help("Output in JSON format [default: CSV]"),
+        )
+        .arg(
+            Arg::with_name("parquet")
+                .takes_value(false)
+                .short('p')
+                .long("parquet")
+                .help("Output in Parquet format [default: CSV]"),
         );
 
     let args = app.get_matches();
@@ -102,9 +109,10 @@ fn main() {
 
     let no_header = args.is_present("no-header");
     let is_json = args.is_present("json");
+    let is_parquet = args.is_present("parquet");
 
     match process_file(
-        input, output, types, tz_offset, quote, delimiter, no_header, is_json,
+        input, output, types, tz_offset, quote, delimiter, no_header, is_json, is_parquet,
     ) {
         Ok(_) => {}
         Err(e) => eprintln!("Error: {}", e),
