@@ -1,5 +1,4 @@
-use std::fs::File;
-use std::io::Result;
+use std::io::{Read, Result};
 
 use crate::{read_u16, read_u32, read_u8};
 
@@ -14,7 +13,7 @@ pub struct ColumnDefinitions {
 }
 
 impl ColumnDefinitions {
-    pub fn from_reader(reader: &mut File) -> Result<Self> {
+    pub fn from_reader(reader: &mut impl Read) -> Result<Self> {
         let header_length: u32 = read_u32(reader)?;
         let version = read_u16(reader)?;
 
@@ -43,14 +42,15 @@ impl ColumnDefinitions {
 mod tests {
     // use std::io::{Seek, SeekFrom};
 
+    use std::io::{BufReader, Seek, SeekFrom};
+
     use crate::column_definitions::ColumnDefinitions;
-    use std::io::{Seek, SeekFrom};
 
     #[test]
     fn test_read_from_good_file() {
         use std::fs::File;
 
-        let mut file = File::open("data/all-types.bin").unwrap();
+        let mut file = BufReader::new(File::open("data/all-types.bin").unwrap());
 
         file.seek(SeekFrom::Start(11)).unwrap();
 

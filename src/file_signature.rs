@@ -2,7 +2,7 @@ use core::fmt;
 use std::error;
 use std::error::Error;
 use std::fmt::Formatter;
-use std::fs::File;
+use std::io::Read;
 
 use crate::read_u8;
 
@@ -33,7 +33,7 @@ impl error::Error for FileSignatureError {
 }
 
 impl FileSignature {
-    pub fn from_reader(reader: &mut File) -> Result<Self, Box<dyn Error>> {
+    pub fn from_reader(reader: &mut impl Read) -> Result<Self, Box<dyn Error>> {
         let mut data: [u8; 11] = [0; 11];
 
         for i in 0..FILE_SIGNATURE_LENGTH {
@@ -60,12 +60,13 @@ fn validate(data: &[u8; 11]) -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use std::fs::File;
+    use std::io::BufReader;
 
     use crate::file_signature::FileSignature;
 
     #[test]
     fn test_read_from_good_file() {
-        let mut file = File::open("data/all-types.bin").unwrap();
+        let mut file = BufReader::new(File::open("data/all-types.bin").unwrap());
 
         let res = FileSignature::from_reader(&mut file);
 
@@ -74,7 +75,7 @@ mod tests {
 
     #[test]
     fn test_read_from_bad_file() {
-        let mut file = File::open("data/all-types-with-bad-signature.bin").unwrap();
+        let mut file = BufReader::new(File::open("data/all-types-with-bad-signature.bin").unwrap());
 
         let res = FileSignature::from_reader(&mut file);
 
