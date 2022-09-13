@@ -1,5 +1,6 @@
 use std::error::Error;
-use std::io::{BufRead, BufReader, Read};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::result::Result;
 
 use crate::column_conversion::ColumnConversion;
@@ -13,7 +14,7 @@ pub struct ColumnTypes {
 }
 
 impl ColumnTypes {
-    pub fn from_reader(reader: impl Read) -> Result<Self, Box<dyn Error>> {
+    pub fn from_reader(reader: BufReader<File>) -> Result<Self, Box<dyn Error>> {
         let mut column_types: Vec<ColumnType> = vec![];
         let mut column_names: Vec<String> = vec![];
         let mut column_conversions: Vec<Option<ColumnConversion>> = vec![];
@@ -64,6 +65,8 @@ impl ColumnTypes {
 
 #[cfg(test)]
 mod tests {
+    use std::io::BufReader;
+
     use crate::column_type::ColumnType::*;
     use crate::column_types::ColumnTypes;
 
@@ -71,7 +74,7 @@ mod tests {
     fn test_good_input() {
         use std::fs::File;
 
-        let file = File::open("data/all-valid-types.txt").unwrap();
+        let file = BufReader::new(File::open("data/all-valid-types.txt").unwrap());
 
         let expected_types = vec![
             Integer,
@@ -100,7 +103,7 @@ mod tests {
     fn test_invalid_input() {
         use std::fs::File;
 
-        let file = File::open("data/types-with-one-invalid.txt").unwrap();
+        let file = BufReader::new(File::open("data/types-with-one-invalid.txt").unwrap());
 
         ColumnTypes::from_reader(file).unwrap();
     }

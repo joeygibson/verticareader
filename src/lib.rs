@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fs::File;
 use std::io;
-use std::io::{stdout, BufWriter, Read, Write};
+use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -17,7 +17,7 @@ mod vertica_native_file;
 
 fn read_variable(reader: &mut impl Read, length: usize) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut vec = vec![0u8; length];
-    reader.read(vec.as_mut_slice())?;
+    reader.read_exact(vec.as_mut_slice())?;
 
     Ok(vec)
 }
@@ -25,13 +25,9 @@ fn read_variable(reader: &mut impl Read, length: usize) -> Result<Vec<u8>, Box<d
 fn read_u32(reader: &mut impl Read) -> io::Result<u32> {
     let mut bytes: [u8; 4] = [0; 4];
 
-    let res = reader.read(&mut bytes)?;
+    reader.read_exact(&mut bytes)?;
 
-    if res != 4 {
-        Ok(0)
-    } else {
-        Ok(u32::from_le_bytes(bytes))
-    }
+    Ok(u32::from_le_bytes(bytes))
 }
 
 fn read_u16(reader: &mut impl Read) -> io::Result<u16> {
@@ -65,13 +61,13 @@ pub fn process_file(
     }
 
     let mut input_file = match File::open(&input) {
-        Ok(i) => i,
+        Ok(file) => BufReader::new(file),
         Err(e) => return Err(e.to_string()),
     };
 
-    let types_reader = File::open(types).unwrap();
+    let types_reader = BufReader::new(File::open(types).unwrap());
 
-    let types = match ColumnTypes::from_reader(&types_reader) {
+    let types = match ColumnTypes::from_reader(types_reader) {
         Ok(types) => types,
         Err(e) => {
             return Err(format!("parsing column types: {}", e));
@@ -392,7 +388,7 @@ mod tests {
             let f = File::open(&output_file_name).unwrap();
 
             let contents: Value = serde_json::from_reader(f).unwrap();
-            
+
             assert_eq!(contents["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents["The_Date"].as_str().unwrap(), "1999-01-08");
         });

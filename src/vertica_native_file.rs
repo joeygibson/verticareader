@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::File;
 use std::io::Read;
 
 use serde_json::{Number, Value};
@@ -14,11 +13,11 @@ use crate::{read_u32, read_u8, read_variable};
 pub struct VerticaNativeFile<'a> {
     _signature: FileSignature,
     pub definitions: ColumnDefinitions,
-    file: &'a File,
+    file: &'a mut dyn Read,
 }
 
 impl<'a> VerticaNativeFile<'a> {
-    pub fn from_reader(reader: &'a mut File) -> Result<Self, Box<dyn Error>> {
+    pub fn from_reader(reader: &'a mut impl Read) -> Result<Self, Box<dyn Error>> {
         let signature = FileSignature::from_reader(reader)?;
         let definitions = ColumnDefinitions::from_reader(reader)?;
 
@@ -34,13 +33,16 @@ impl<'a> Iterator for VerticaNativeFile<'a> {
     type Item = Row;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let row_length = read_u32(&mut self.file).unwrap();
+        let row_length = match read_u32(&mut self.file) {
+            Ok(length) => length,
+            Err(_) => return None,
+        };
 
         if row_length <= 0 {
             return None;
         }
 
-        match Row::from_reader(self.file, &self.definitions.column_widths) {
+        match Row::from_reader(&mut self.file, &self.definitions.column_widths) {
             Ok(row) => Some(row),
             Err(e) => {
                 eprintln!("reading data: {}", e);
@@ -53,18 +55,18 @@ impl<'a> Iterator for VerticaNativeFile<'a> {
 #[derive(Debug)]
 #[allow(unused)]
 pub struct Row {
-    null_values: Vec<bool>,
-    data: Vec<Option<Vec<u8>>>,
+    pub null_values: Vec<bool>,
+    pub data: Vec<Option<Vec<u8>>>,
 }
 
 impl Row {
     fn from_reader(
-        mut reader: impl Read,
+        reader: &mut impl Read,
         column_widths: &Vec<u32>,
     ) -> Result<Self, Box<dyn Error>> {
         let mut data: Vec<Option<Vec<u8>>> = vec![];
 
-        let null_values = Row::read_bitfield(&mut reader, &column_widths)?;
+        let null_values = Row::read_bitfield(reader, &column_widths)?;
 
         for (index, width) in column_widths.iter().enumerate() {
             if null_values[index] {
@@ -74,14 +76,14 @@ impl Row {
 
             let mut column: Vec<u8> = vec![];
 
-            let column_width = if *width == std::u32::MAX {
-                read_u32(&mut reader)?
+            let column_width = if *width == u32::MAX {
+                read_u32(reader)?
             } else {
                 *width
             };
 
             for _ in 0..column_width {
-                let value = read_u8(&mut reader)?;
+                let value = read_u8(reader)?;
 
                 column.push(value);
             }
@@ -123,6 +125,7 @@ impl Row {
 
             let output =
                 types.column_types[index].format_value(column, tz_offset, column_conversion);
+
             record.push(output);
         }
 
@@ -181,12 +184,13 @@ impl Row {
 #[cfg(test)]
 mod tests {
     use std::fs::File;
+    use std::io::BufReader;
 
     use crate::vertica_native_file::VerticaNativeFile;
 
     #[test]
     fn test_read_from_good_file() {
-        let mut file = File::open("data/all-types.bin").unwrap();
+        let mut file = BufReader::new(File::open("data/all-types.bin").unwrap());
 
         let file = VerticaNativeFile::from_reader(&mut file).unwrap();
 
@@ -197,7 +201,7 @@ mod tests {
 
     #[test]
     fn test_read_from_good_file_with_nulls() {
-        let mut file = File::open("data/all-types-with-nulls.bin").unwrap();
+        let mut file = BufReader::new(File::open("data/all-types-with-nulls.bin").unwrap());
 
         let file = VerticaNativeFile::from_reader(&mut file).unwrap();
 
