@@ -1,5 +1,6 @@
 target
 *.csv
+*.json
 private-data
 
 tmp/

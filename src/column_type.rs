@@ -5,10 +5,10 @@ use std::result::Result;
 
 use chrono::prelude::*;
 use chrono::Duration;
+use lazy_static::lazy_static;
 use regex;
 use regex::Regex;
-
-use lazy_static::lazy_static;
+use uuid::Uuid;
 
 use crate::column_conversion::ColumnConversion;
 
@@ -28,6 +28,7 @@ pub enum ColumnType {
     Binary,
     Numeric,
     Interval,
+    UUID,
 }
 
 impl ColumnType {
@@ -53,6 +54,7 @@ impl ColumnType {
             "binary" => ColumnType::Binary,
             "numeric" => ColumnType::Numeric,
             "interval" => ColumnType::Interval,
+            "uuid" => ColumnType::UUID,
             _ => return Err(format!("invalid type: {}", string.clone())),
         };
 
@@ -218,6 +220,18 @@ impl ColumnType {
                         let (minutes, remainder) = ((remainder / 60), (remainder % 60));
 
                         format!("{:02}:{:02}:{:02}", hours, minutes, remainder)
+                    }
+                    ColumnType::UUID => {
+                        let tmp_bytes = &value[..];
+                        let mut bytes = [0; 16];
+
+                        for i in 0..15 {
+                            bytes[i] = tmp_bytes[i];
+                        }
+
+                        let uuid = Uuid::from_bytes(bytes);
+
+                        format!("{}", uuid)
                     }
                 }
             }
