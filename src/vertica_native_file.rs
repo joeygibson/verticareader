@@ -168,7 +168,8 @@ impl Row {
                 | ColumnType::TimeTz
                 | ColumnType::Varbinary
                 | ColumnType::Binary
-                | ColumnType::Interval => Value::String(value),
+                | ColumnType::Interval
+                | ColumnType::UUID => Value::String(value),
                 ColumnType::Boolean => Value::Bool(value == "true"),
             };
 
