@@ -4,6 +4,10 @@ use std::io;
 use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
+use parquet::file::properties::WriterProperties;
+use parquet::file::writer::SerializedFileWriter;
+use parquet::schema::parser::parse_message_type;
 
 use column_types::ColumnTypes;
 use vertica_native_file::VerticaNativeFile;
@@ -184,16 +188,23 @@ fn process_parquet_file(
         return Err("Parquet files require column names in types file".to_string());
     }
 
-    let schema = generate_parquet_schema(&types);
+    let schema = Arc::new(parse_message_type(generate_parquet_schema(&types).as_str()).unwrap());
+    let props = Arc::new(WriterProperties::builder().build());
+
+    let mut parquet_writer = SerializedFileWriter::new(writer, schema, props)?;
 
     for row in native_file {
-        match row.generate_json_output(&types, tz_offset) {
-            Ok(record) => match writer.write_all(record.as_bytes()) {
-                Ok(_) => {}
-                Err(e) => eprintln!("error: {}", e),
-            },
-            Err(e) => eprintln!("error: {}", e),
+        let mut rgw = parquet_writer.next_row_group()?;
+        let mut wrt = rgw.next_column()?;
+        if let Some(w) = wrt {
+            w.
         }
+        // for col in row.data {
+        //     if let Some(mut wrt) {
+        //         wrt.
+        //     }
+        //
+        // }
     }
 
     return Ok(());
