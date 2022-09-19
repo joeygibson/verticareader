@@ -4,6 +4,8 @@ use std::io;
 use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
+use flate2::Compression;
+use flate2::write::GzEncoder;
 
 use column_types::ColumnTypes;
 use vertica_native_file::VerticaNativeFile;
@@ -55,6 +57,7 @@ pub fn process_file(
     delimiter: u8,
     no_header: bool,
     is_json: bool,
+    is_gzip: bool,
 ) -> Result<(), String> {
     if !Path::new(input.as_str()).exists() {
         return Err(format!("input file {} does not exist", input));
@@ -90,7 +93,13 @@ pub fn process_file(
                 return Err("can't overwrite input file".to_string());
             }
 
-            Box::new(File::create(filename).unwrap())
+            let tmp_writer = File::create(filename).unwrap();
+
+            if is_gzip {
+                Box::new(GzEncoder::new(tmp_writer, Compression::default()))
+            } else {
+                Box::new(tmp_writer)
+            }
         } else {
             Box::new(stdout())
         });
@@ -177,6 +186,7 @@ mod tests {
     use std::{fs, panic};
 
     use csv::StringRecord;
+    use flate2::read::GzDecoder;
     use serde_json::Value;
     use uuid::Uuid;
 
@@ -201,6 +211,7 @@ mod tests {
                 None,
                 b'"',
                 b',',
+                false,
                 false,
                 false,
             );
@@ -250,6 +261,7 @@ mod tests {
                 b',',
                 false,
                 false,
+                false,
             );
 
             assert!(result.is_ok());
@@ -296,6 +308,7 @@ mod tests {
                 b'"',
                 b',',
                 true,
+                false,
                 false,
             );
 
@@ -344,6 +357,7 @@ mod tests {
                 b',',
                 false,
                 true,
+                false,
             );
 
             assert!(result.is_err());
@@ -382,10 +396,100 @@ mod tests {
                 b',',
                 false,
                 true,
+                false,
             );
 
             assert!(result.is_ok());
             let f = File::open(&output_file_name).unwrap();
+
+            let contents: Value = serde_json::from_reader(f).unwrap();
+
+            assert_eq!(contents["IntCol"].as_i64().unwrap(), 1);
+            assert_eq!(contents["The_Date"].as_str().unwrap(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_gzipped_csv_file_with_headers() {
+        let output_file_name = format!(
+            "{}/{}.csv",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types.bin");
+        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                false,
+                true,
+            );
+
+            assert!(result.is_ok());
+
+            let f = GzDecoder::new(File::open(&output_file_name).unwrap());
+
+            let mut csv_file = csv::ReaderBuilder::new().has_headers(true).from_reader(f);
+
+            let records: Vec<StringRecord> = csv_file.records().map(|r| r.unwrap()).collect();
+
+            assert!(csv_file.has_headers());
+            assert_eq!(records.len(), 1_usize);
+
+            assert_eq!(records[0].len(), 14_usize);
+            assert_eq!(records[0][0].to_string(), "1");
+            assert_eq!(records[0][5].to_string(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_gzipped_json_file() {
+        let output_file_name = format!(
+            "{}/{}.json",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types.bin");
+        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                true,
+                true,
+            );
+
+            assert!(result.is_ok());
+            let f = GzDecoder::new(File::open(&output_file_name).unwrap());
 
             let contents: Value = serde_json::from_reader(f).unwrap();
 

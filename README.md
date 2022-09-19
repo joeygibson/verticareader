@@ -18,6 +18,7 @@ ARGS:
 
 OPTIONS:
     -d, --delimiter <delimiter>    Field delimiter for CSV file [default: ,]
+    -g, --gzip                     Compress output file using gzip
     -h, --help                     Print help information
     -j, --json                     Output in JSON format [default: CSV]
     -n, --no-header                Don't include column header row in CSV file
