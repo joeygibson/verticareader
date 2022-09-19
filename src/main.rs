@@ -65,6 +65,13 @@ fn main() {
                 .short('j')
                 .long("json")
                 .help("Output in JSON format [default: CSV]"),
+        )
+        .arg(
+            Arg::with_name("gzip")
+                .takes_value(false)
+                .short('g')
+                .long("gzip")
+                .help("Compress output file using gzip"),
         );
 
     let args = app.get_matches();
@@ -102,9 +109,10 @@ fn main() {
 
     let no_header = args.is_present("no-header");
     let is_json = args.is_present("json");
+    let is_gzip = args.is_present("gzip");
 
     match process_file(
-        input, output, types, tz_offset, quote, delimiter, no_header, is_json,
+        input, output, types, tz_offset, quote, delimiter, no_header, is_json, is_gzip
     ) {
         Ok(_) => {}
         Err(e) => eprintln!("Error: {}", e),
