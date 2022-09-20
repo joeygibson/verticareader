@@ -1,11 +1,11 @@
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
-use flate2::Compression;
-use flate2::write::GzEncoder;
 
 use column_types::ColumnTypes;
 use vertica_native_file::VerticaNativeFile;
@@ -165,17 +165,29 @@ fn process_json_file(
         return Err("JSON files require column names in types file".to_string());
     }
 
-    for row in native_file {
+    write_json_row(writer, "[".as_bytes());
+
+    for (i, row) in native_file.enumerate() {
+        if i > 0 {
+            write_json_row(writer, ",".as_bytes());
+        }
+
         match row.generate_json_output(&types, tz_offset) {
-            Ok(record) => match writer.write_all(record.as_bytes()) {
-                Ok(_) => {}
-                Err(e) => eprintln!("error: {}", e),
-            },
+            Ok(record) => write_json_row(writer, record.as_bytes()),
             Err(e) => eprintln!("error: {}", e),
         }
     }
 
+    write_json_row(writer, "]\n".as_bytes());
+
     return Ok(());
+}
+
+fn write_json_row(writer: &mut BufWriter<Box<dyn Write>>, buf: &[u8]) {
+    match writer.write_all(buf) {
+        Ok(_) => {}
+        Err(e) => eprintln!("error: {}", e),
+    }
 }
 
 #[cfg(test)]
@@ -404,8 +416,8 @@ mod tests {
 
             let contents: Value = serde_json::from_reader(f).unwrap();
 
-            assert_eq!(contents["IntCol"].as_i64().unwrap(), 1);
-            assert_eq!(contents["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
+            assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {
@@ -493,8 +505,8 @@ mod tests {
 
             let contents: Value = serde_json::from_reader(f).unwrap();
 
-            assert_eq!(contents["IntCol"].as_i64().unwrap(), 1);
-            assert_eq!(contents["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
+            assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {

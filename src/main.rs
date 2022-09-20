@@ -112,7 +112,7 @@ fn main() {
     let is_gzip = args.is_present("gzip");
 
     match process_file(
-        input, output, types, tz_offset, quote, delimiter, no_header, is_json, is_gzip
+        input, output, types, tz_offset, quote, delimiter, no_header, is_json, is_gzip,
     ) {
         Ok(_) => {}
         Err(e) => eprintln!("Error: {}", e),
