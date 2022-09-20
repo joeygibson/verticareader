@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::io::Read;
+use std::io::{Cursor, Read};
 
 use serde_json::{Number, Value};
 
@@ -8,7 +8,7 @@ use crate::column_definitions::ColumnDefinitions;
 use crate::column_type::ColumnType;
 use crate::column_types::ColumnTypes;
 use crate::file_signature::FileSignature;
-use crate::{read_u32, read_u8, read_variable};
+use crate::{compute_bitfield_length, read_u32, read_u8, read_variable};
 
 pub struct VerticaNativeFile<'a> {
     _signature: FileSignature,
@@ -42,7 +42,20 @@ impl<'a> Iterator for VerticaNativeFile<'a> {
             return None;
         }
 
-        match Row::from_reader(&mut self.file, &self.definitions.column_widths) {
+        let bitfield_length = compute_bitfield_length(self.definitions.column_widths.len() as u32);
+
+        let mut chunk_reader = match read_variable(
+            &mut self.file,
+            (row_length + bitfield_length as u32) as usize,
+        ) {
+            Ok(chunk) => Cursor::new(chunk),
+            Err(e) => {
+                eprintln!("reading data: {}", e);
+                return None;
+            }
+        };
+
+        match Row::from_reader(&mut chunk_reader, &self.definitions.column_widths) {
             Ok(row) => Some(row),
             Err(e) => {
                 eprintln!("reading data: {}", e);
@@ -100,8 +113,7 @@ impl Row {
     ) -> Result<Vec<bool>, Box<dyn Error>> {
         let mut null_values: Vec<bool> = vec![];
 
-        let bitfield_length =
-            (column_widths.len() / 8) + if column_widths.len() % 8 == 0 { 0 } else { 1 };
+        let bitfield_length = compute_bitfield_length(column_widths.len() as u32);
         let bitfield = read_variable(&mut reader, bitfield_length as usize)?;
 
         for byte in bitfield.iter() {

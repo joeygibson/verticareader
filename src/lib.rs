@@ -1,11 +1,12 @@
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
+
+use flate2::write::GzEncoder;
+use flate2::Compression;
 
 use column_types::ColumnTypes;
 use vertica_native_file::VerticaNativeFile;
@@ -188,6 +189,10 @@ fn write_json_row(writer: &mut BufWriter<Box<dyn Write>>, buf: &[u8]) {
         Ok(_) => {}
         Err(e) => eprintln!("error: {}", e),
     }
+}
+
+fn compute_bitfield_length(column_count: u32) -> usize {
+    ((column_count / 8) + if column_count % 8 == 0 { 0 } else { 1 }) as usize
 }
 
 #[cfg(test)]
