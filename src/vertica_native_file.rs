@@ -8,7 +8,7 @@ use crate::column_definitions::ColumnDefinitions;
 use crate::column_type::ColumnType;
 use crate::column_types::ColumnTypes;
 use crate::file_signature::FileSignature;
-use crate::{read_u32, read_u8, read_variable};
+use crate::{convert_to_float, convert_to_int, read_u32, read_u8, read_variable};
 
 pub struct VerticaNativeFile<'a> {
     _signature: FileSignature,
@@ -142,38 +142,53 @@ impl Row {
         for (index, column) in self.data.iter().enumerate() {
             let column_conversion = &types.column_conversions[index];
 
-            let name = types.column_names[index].clone();
-            let value =
-                types.column_types[index].format_value(column, tz_offset, column_conversion);
-
-            let mapped_value = match types.column_types[index] {
-                ColumnType::Integer | ColumnType::Numeric => {
-                    if value.is_empty() {
-                        Value::Null
-                    } else {
+            let mapped_value = if column.is_some() {
+                match types.column_types[index] {
+                    ColumnType::Integer => {
+                        let num = convert_to_int(column.as_ref());
+                        Value::Number(Number::from(num))
+                    }
+                    ColumnType::Numeric => {
+                        let value = types.column_types[index].format_value(
+                            column,
+                            tz_offset,
+                            column_conversion,
+                        );
                         let num = value.parse::<i64>().unwrap();
                         Value::Number(Number::from(num))
                     }
+                    ColumnType::Float => {
+                        let num = convert_to_float(column.as_ref());
+                        Value::Number(Number::from_f64(num).unwrap())
+                    }
+                    ColumnType::Char
+                    | ColumnType::Varchar
+                    | ColumnType::Date
+                    | ColumnType::Timestamp
+                    | ColumnType::TimestampTz
+                    | ColumnType::Time
+                    | ColumnType::TimeTz
+                    | ColumnType::Varbinary
+                    | ColumnType::Binary
+                    | ColumnType::Interval
+                    | ColumnType::UUID => Value::String(types.column_types[index].format_value(
+                        column,
+                        tz_offset,
+                        column_conversion,
+                    )),
+                    ColumnType::Boolean => Value::Bool(
+                        types.column_types[index].format_value(
+                            column,
+                            tz_offset,
+                            column_conversion,
+                        ) == "true",
+                    ),
                 }
-                ColumnType::Float => {
-                    let num = value.parse::<f64>().unwrap();
-                    Value::Number(Number::from_f64(num).unwrap())
-                }
-                ColumnType::Char
-                | ColumnType::Varchar
-                | ColumnType::Date
-                | ColumnType::Timestamp
-                | ColumnType::TimestampTz
-                | ColumnType::Time
-                | ColumnType::TimeTz
-                | ColumnType::Varbinary
-                | ColumnType::Binary
-                | ColumnType::Interval
-                | ColumnType::UUID => Value::String(value),
-                ColumnType::Boolean => Value::Bool(value == "true"),
+            } else {
+                Value::Null
             };
 
-            record.insert(name, mapped_value);
+            record.insert(&types.column_names[index], mapped_value);
         }
 
         let str_record = serde_json::to_string(&record).unwrap();

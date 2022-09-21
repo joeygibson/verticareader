@@ -1,5 +1,6 @@
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use std::convert::TryInto;
 use std::error::Error;
 use std::fs::File;
 use std::io;
@@ -188,6 +189,28 @@ fn write_json_row(writer: &mut BufWriter<Box<dyn Write>>, buf: &[u8]) {
         Ok(_) => {}
         Err(e) => eprintln!("error: {}", e),
     }
+}
+
+fn convert_to_int(value: Option<&Vec<u8>>) -> i64 {
+    let bytes = &value.unwrap()[..];
+
+    return match bytes.len() {
+        8 => i64::from_le_bytes(bytes.try_into().unwrap()),
+        4 => i32::from_le_bytes(bytes.try_into().unwrap()) as i64,
+        2 => i16::from_le_bytes(bytes.try_into().unwrap()) as i64,
+        1 => i8::from_le_bytes(bytes.try_into().unwrap()) as i64,
+        _ => panic!("incorrect integer byte count: {}", bytes.len()),
+    };
+}
+
+fn convert_to_float(value: Option<&Vec<u8>>) -> f64 {
+    let bytes = &value.unwrap()[..];
+
+    return match bytes.len() {
+        8 => f64::from_le_bytes(bytes.try_into().unwrap()),
+        4 => f32::from_le_bytes(bytes.try_into().unwrap()) as f64,
+        _ => panic!("incorrect integer byte count: {}", bytes.len()),
+    };
 }
 
 #[cfg(test)]
