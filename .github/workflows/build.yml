@@ -18,6 +18,8 @@ jobs:
           - os: macOS-latest
     steps:
       - uses: actions/checkout@v2
+      - name: Identify Build Specs
+        run: cargo --version && uname -a
       - name: Build and test
         run: cargo test --verbose
       - name: Build for release
