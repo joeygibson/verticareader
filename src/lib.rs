@@ -1,11 +1,12 @@
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
+
+use flate2::write::GzEncoder;
+use flate2::Compression;
 
 use column_types::ColumnTypes;
 use vertica_native_file::VerticaNativeFile;
@@ -58,6 +59,7 @@ pub fn process_file(
     no_header: bool,
     is_json: bool,
     is_gzip: bool,
+    is_json_lines: bool,
 ) -> Result<(), String> {
     if !Path::new(input.as_str()).exists() {
         return Err(format!("input file {} does not exist", input));
@@ -104,8 +106,14 @@ pub fn process_file(
             Box::new(stdout())
         });
 
-    return if is_json {
-        process_json_file(native_file, &mut base_writer, types, tz_offset)
+    return if is_json || is_json_lines {
+        process_json_file(
+            native_file,
+            &mut base_writer,
+            types,
+            tz_offset,
+            is_json_lines,
+        )
     } else {
         process_csv_file(
             native_file,
@@ -160,15 +168,18 @@ fn process_json_file(
     writer: &mut BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
     tz_offset: i8,
+    is_json_lines: bool,
 ) -> Result<(), String> {
     if !types.has_names() {
         return Err("JSON files require column names in types file".to_string());
     }
 
-    write_json_row(writer, "[".as_bytes());
+    if !is_json_lines {
+        write_json_row(writer, "[".as_bytes());
+    }
 
     for (i, row) in native_file.enumerate() {
-        if i > 0 {
+        if i > 0 && !is_json_lines {
             write_json_row(writer, ",".as_bytes());
         }
 
@@ -176,9 +187,15 @@ fn process_json_file(
             Ok(record) => write_json_row(writer, record.as_bytes()),
             Err(e) => eprintln!("error: {}", e),
         }
+
+        if is_json_lines {
+            write_json_row(writer, "\n".as_bytes());
+        }
     }
 
-    write_json_row(writer, "]\n".as_bytes());
+    if !is_json_lines {
+        write_json_row(writer, "]\n".as_bytes());
+    }
 
     return Ok(());
 }
@@ -223,6 +240,7 @@ mod tests {
                 None,
                 b'"',
                 b',',
+                false,
                 false,
                 false,
                 false,
@@ -274,6 +292,7 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
             );
 
             assert!(result.is_ok());
@@ -320,6 +339,7 @@ mod tests {
                 b'"',
                 b',',
                 true,
+                false,
                 false,
                 false,
             );
@@ -370,6 +390,7 @@ mod tests {
                 false,
                 true,
                 false,
+                false,
             );
 
             assert!(result.is_err());
@@ -408,6 +429,7 @@ mod tests {
                 b',',
                 false,
                 true,
+                false,
                 false,
             );
 
@@ -450,6 +472,7 @@ mod tests {
                 false,
                 false,
                 true,
+                false,
             );
 
             assert!(result.is_ok());
@@ -498,6 +521,7 @@ mod tests {
                 false,
                 true,
                 true,
+                false,
             );
 
             assert!(result.is_ok());
@@ -507,6 +531,48 @@ mod tests {
 
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_json_lines_file() {
+        let output_file_name = format!(
+            "{}/{}.json",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types.bin");
+        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                true,
+                false,
+                true,
+            );
+
+            assert!(result.is_ok());
+            let f = File::open(&output_file_name).unwrap();
+
+            let contents: Value = serde_json::from_reader(f).unwrap();
+
+            assert_eq!(contents["IntCol"].as_i64().unwrap(), 1);
+            assert_eq!(contents["The_Date"].as_str().unwrap(), "1999-01-08");
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {
