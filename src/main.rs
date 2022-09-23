@@ -67,6 +67,13 @@ fn main() {
                 .help("Output in JSON format [default: CSV]"),
         )
         .arg(
+            Arg::with_name("json-lines")
+                .takes_value(false)
+                .short('J')
+                .long("json-lines")
+                .help("Output in JSON Lines format [default: CSV]"),
+        )
+        .arg(
             Arg::with_name("gzip")
                 .takes_value(false)
                 .short('g')
@@ -109,10 +116,20 @@ fn main() {
 
     let no_header = args.is_present("no-header");
     let is_json = args.is_present("json");
+    let is_json_lines = args.is_present("json-lines");
     let is_gzip = args.is_present("gzip");
 
     match process_file(
-        input, output, types, tz_offset, quote, delimiter, no_header, is_json, is_gzip,
+        input,
+        output,
+        types,
+        tz_offset,
+        quote,
+        delimiter,
+        no_header,
+        is_json,
+        is_gzip,
+        is_json_lines,
     ) {
         Ok(_) => {}
         Err(e) => eprintln!("Error: {}", e),

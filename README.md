@@ -21,6 +21,7 @@ OPTIONS:
     -g, --gzip                     Compress output file using gzip
     -h, --help                     Print help information
     -j, --json                     Output in JSON format [default: CSV]
+    -J, --json-lines               Output in JSON Lines format [default: CSV]
     -n, --no-header                Don't include column header row in CSV file
     -o, --output <output>          Output file name [default: stdout]
     -s, --single-quotes            Use ' for quoting in CSV file
