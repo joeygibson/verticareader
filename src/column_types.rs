@@ -7,6 +7,7 @@ use crate::column_conversion::ColumnConversion;
 use crate::column_type::ColumnType;
 
 #[derive(Debug)]
+/// A struct containing all the `ColumnType` objects, the optional names, and optional converters
 pub struct ColumnTypes {
     pub column_types: Vec<ColumnType>,
     pub column_names: Vec<String>,
@@ -21,6 +22,7 @@ impl ColumnTypes {
 
         let buf = BufReader::new(reader);
 
+        // Loop over all the rows of the types file, skipping blank lines.
         for line in buf
             .lines()
             .filter(|l| l.is_ok() && !l.as_ref().unwrap().is_empty())
@@ -28,14 +30,17 @@ impl ColumnTypes {
             if let Ok(line) = line {
                 let chunks: Vec<String> = line.split("/").map(|s| s.to_string()).collect();
 
+                // We know the column type is there
                 let column_type = ColumnType::from_string(&chunks[0].trim())?;
 
+                // Column name is optional, so we'll use a blank if it's not there
                 let column_name = if chunks.len() > 1 {
                     chunks[1].trim().to_string()
                 } else {
                     "".to_string()
                 };
 
+                // The column converter is also optional
                 let column_conversion = if chunks.len() > 2 {
                     match ColumnConversion::from_string(chunks[2].trim()) {
                         Ok(column_conversion) => Some(column_conversion),

@@ -13,6 +13,41 @@ use uuid::Uuid;
 use crate::column_conversion::ColumnConversion;
 
 #[derive(Debug, PartialEq)]
+/// An enum of all possible Vertica data types. We read in a file of type information to
+/// create this data structure. The format of the file looks like this
+///
+/// <type>/[name]/[conversion]
+///
+/// where
+/// * `type` is the actual data type, lowercase, that matches the values in the enum,
+/// * `name` is an optional name of the column for use in the file. The name can be different from what
+///    the column was named in the table
+/// * `conversion` is an optional value to request conversion of the value. The possible values
+///   are `ipaddress` and `macaddress`
+///
+/// Examples:
+///   Integer
+///   Float
+///   Char
+///   Varchar
+///
+/// The above is a four-column file, with four different types. Since this file contains no names,
+/// it isn't usable for JSON or CSV-with-headers.
+///
+///   Integer/IntCol
+///   Float/FloatCol
+///   Char / CharCol
+///   Varchar/VarCharCol
+///
+/// The above is the same four-column file, but with names for each column.
+///
+///   Integer/IntCol
+///   Float/FloatCol
+///   Varbinary/server_ip_address/ipaddress
+///   Varbinary/server_mac_address/macaddress
+///
+/// The above is four column, two of which have the optional converters included.
+///
 pub enum ColumnType {
     Integer,
     Float,
@@ -32,6 +67,7 @@ pub enum ColumnType {
 }
 
 impl ColumnType {
+    /// Read the types file and build the structure.
     pub fn from_string(string: &str) -> Result<ColumnType, String> {
         lazy_static! {
             static ref PAREN_REGEX: Regex = Regex::new(r"\(.+\)").unwrap();
@@ -61,6 +97,14 @@ impl ColumnType {
         Ok(result)
     }
 
+    /// Format the passed-in vector of `u8`s, into Strings, suitable for use in CSV files.
+    ///
+    /// * `value` - the vector of bytes to format
+    /// * `tz_offset` - number of hours to adjust times
+    /// * `column_conversion` - an optional converter for certain data types
+    ///
+    /// Note that all multi-byte values in the native file are stored in little-endian
+    /// format, so we need to be mindful of that.
     pub fn format_value(
         &self,
         value: &Option<Vec<u8>>,
