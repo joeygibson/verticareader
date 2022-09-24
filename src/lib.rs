@@ -195,7 +195,7 @@ fn process_csv_file(
 
     // Loop over every row in the Vertica file, writing out a CSV row for each one.
     for row in native_file {
-        match row.generate_output(&types, tz_offset) {
+        match row.generate_csv_output(&types, tz_offset) {
             Ok(record) => match &csv_writer.write_record(&record[..]) {
                 Ok(_) => {}
                 Err(e) => eprintln!("error: {}", e),

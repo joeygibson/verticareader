@@ -13,6 +13,12 @@ const VALID_FILE_SIGNATURE_BYTES: [u8; 11] = [
 
 #[derive(Debug)]
 #[allow(unused)]
+/// A static signature at the beginning over every Vertica native file. The byte layout
+/// of this signature can be found [here](https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/FileSignature.htm).
+///
+/// We don't do anything with this structure, other than validate that what we read matches
+/// the `VALID_FILE_SIGNATURE_BYTES` constant.
+///
 pub struct FileSignature {
     data: [u8; 11],
 }

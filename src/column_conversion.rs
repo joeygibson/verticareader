@@ -1,6 +1,8 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 #[derive(Debug)]
+/// Conversion functions for IP and Mac addresses. Additional conversations may be added later.
+///
 pub enum ColumnConversion {
     IpAddress,
     MacAddress,
@@ -17,6 +19,10 @@ impl ColumnConversion {
         Ok(result)
     }
 
+    /// Convert the vector of bytes into a formatted string, according to the type of `self`.
+    ///
+    /// * `bytes` - the vector of bytes to convert
+    ///
     pub fn convert(&self, bytes: Vec<u8>) -> String {
         match &*self {
             ColumnConversion::IpAddress => {
