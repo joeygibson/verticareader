@@ -18,6 +18,10 @@ mod column_types;
 mod file_signature;
 mod vertica_native_file;
 
+/// Read a variable number of bytes from the stream, and return it as a `Vec<u8>`
+///
+/// * `reader` - something implementing `Read` to read from
+/// * `length` - the number of bytes to read
 fn read_variable(reader: &mut impl Read, length: usize) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut vec = vec![0u8; length];
     reader.read_exact(vec.as_mut_slice())?;
@@ -25,6 +29,9 @@ fn read_variable(reader: &mut impl Read, length: usize) -> Result<Vec<u8>, Box<d
     Ok(vec)
 }
 
+/// Read 4 bytes from the stream, and convert it to a u32
+///
+/// * `reader` - something implementing `Read` to read from
 fn read_u32(reader: &mut impl Read) -> io::Result<u32> {
     let mut bytes: [u8; 4] = [0; 4];
 
@@ -33,6 +40,9 @@ fn read_u32(reader: &mut impl Read) -> io::Result<u32> {
     Ok(u32::from_le_bytes(bytes))
 }
 
+/// Read 2 bytes from the stream, and convert it to a u16
+///
+/// * `reader` - something implementing `Read` to read from
 fn read_u16(reader: &mut impl Read) -> io::Result<u16> {
     let mut bytes: [u8; 2] = [0; 2];
 
@@ -41,6 +51,9 @@ fn read_u16(reader: &mut impl Read) -> io::Result<u16> {
     Ok(u16::from_le_bytes(bytes))
 }
 
+/// Read 1 bytes from the stream, and return it
+///
+/// * `reader` - something implementing `Read` to read from
 fn read_u8(reader: &mut impl Read) -> io::Result<u8> {
     let mut bytes: [u8; 1] = [0; 1];
 
@@ -49,6 +62,18 @@ fn read_u8(reader: &mut impl Read) -> io::Result<u8> {
     Ok(u8::from_le_bytes(bytes))
 }
 
+/// The start of the actual file processing.
+///
+/// * `input` - the name of the Vertica native file to read from
+/// * `output` - the name of the file to write, or `None` for `stdout`
+/// * `types` - the name of the type specification file
+/// * `tz_offset` - the number of hours to offset a time, or `None` for 0
+/// * `quote` - what to use instead of `"` for quoted strings
+/// * `delimiter` - what to use instead of `,` for CSV files
+/// * `no_header` - whether to include a header for CSV files
+/// * `is_json` - write a JSON file instead of CSV
+/// * `is_gzip` - gzip the output
+/// * `is_json_lines` - write a [JSON-lines](https://jsonlines.org) file instead of CSV or regular JSON
 pub fn process_file(
     input: String,
     output: Option<&str>,
@@ -72,6 +97,8 @@ pub fn process_file(
 
     let types_reader = BufReader::new(File::open(types).unwrap());
 
+    // Read in the column type specification from the file. If this load fails, we abort,
+    // because we can't proceed without this information.
     let types = match ColumnTypes::from_reader(types_reader) {
         Ok(types) => types,
         Err(e) => {
@@ -79,16 +106,22 @@ pub fn process_file(
         }
     };
 
+    // If no offset was passed in, we'll use 0.
     let tz_offset = match tz_offset {
         None => 0i8,
         Some(s) => i8::from_str(&s).unwrap_or(0i8),
     };
 
+    // This line takes the input file, parses the headers, and gets ready to start retrieving
+    // rows.
     let native_file = match VerticaNativeFile::from_reader(&mut input_file) {
         Ok(i) => i,
         Err(e) => return Err(e.to_string()),
     };
 
+    // If no output file is specified, we will use `stdout`. In both cases, if the user
+    // passed in `-g`, we will gzip the output. If the user specified the same file name
+    // for input and output files, we abort.
     let mut base_writer: BufWriter<Box<dyn Write>> =
         BufWriter::new(if let Some(filename) = output {
             if filename == input {
@@ -127,6 +160,16 @@ pub fn process_file(
     };
 }
 
+/// Read all the rows of the Vertica native binary file, and write them out
+/// in CSV format.
+///
+/// * `native_file` - the Vertica native binary file
+/// * `writer` - the output; either a file, or `stdout`
+/// * `types` - the struct containing the column type info
+/// * `tz_offset` - number of hours to offset times
+/// * `quote` - what to use instead of `"` for quoted strings
+/// * `delimeter` - what to use instead of `,`
+/// * `no_header` - don't include the header row
 fn process_csv_file(
     native_file: VerticaNativeFile,
     writer: BufWriter<Box<dyn Write>>,
@@ -150,6 +193,7 @@ fn process_csv_file(
         }
     }
 
+    // Loop over every row in the Vertica file, writing out a CSV row for each one.
     for row in native_file {
         match row.generate_output(&types, tz_offset) {
             Ok(record) => match &csv_writer.write_record(&record[..]) {
@@ -163,6 +207,14 @@ fn process_csv_file(
     Ok(())
 }
 
+/// Read all the rows of the Vertica native binary file, and write them out
+/// in JSON (or JSON-lines) format.
+///
+/// * `native_file` - the Vertica native binary file
+/// * `writer` - the output; either a file, or `stdout`
+/// * `types` - the struct containing the column type info
+/// * `tz_offset` - number of hours to offset times
+/// * `is_json_lines` - use [JSON-lines](https://jsonlines.org) format, instead of regular JSON
 fn process_json_file(
     native_file: VerticaNativeFile,
     writer: &mut BufWriter<Box<dyn Write>>,
@@ -170,15 +222,21 @@ fn process_json_file(
     tz_offset: i8,
     is_json_lines: bool,
 ) -> Result<(), String> {
+    // Unlike CSV files, which can be written without a header row containing column names, JSON
+    // files require them.
     if !types.has_names() {
         return Err("JSON files require column names in types file".to_string());
     }
 
+    // If the output is not a JSON-lines file, we will create a top-level array,
+    // and include each row inside that, separated by a comma.
     if !is_json_lines {
         write_json_row(writer, "[".as_bytes());
     }
 
     for (i, row) in native_file.enumerate() {
+        // If the output is not a JSON-lines file, we print a comma before every record, after
+        // the first.
         if i > 0 && !is_json_lines {
             write_json_row(writer, ",".as_bytes());
         }
@@ -188,11 +246,13 @@ fn process_json_file(
             Err(e) => eprintln!("error: {}", e),
         }
 
+        // If the output is a JSON-lines file, we need to append a newline after each object.
         if is_json_lines {
             write_json_row(writer, "\n".as_bytes());
         }
     }
 
+    // If the output is not a JSON-lines file, we need to close the array at the end.
     if !is_json_lines {
         write_json_row(writer, "]\n".as_bytes());
     }
@@ -200,6 +260,7 @@ fn process_json_file(
     return Ok(());
 }
 
+/// Convenience function to DRY-ly write a byte-array to the JSON file
 fn write_json_row(writer: &mut BufWriter<Box<dyn Write>>, buf: &[u8]) {
     match writer.write_all(buf) {
         Ok(_) => {}

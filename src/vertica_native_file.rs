@@ -10,13 +10,22 @@ use crate::column_types::ColumnTypes;
 use crate::file_signature::FileSignature;
 use crate::{read_u32, read_u8, read_variable};
 
+/// The [Vertica native binary](https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/CreatingNativeBinaryFormatFiles.htm)
+/// is a compact, structured, binary file format for copy large amounts of data into the Vertica
+/// database. The file structure can be found at the above link. This struct contains all the
+/// metadata read from the header, and provides an iterator to walk through the individual rows
+/// of data.
 pub struct VerticaNativeFile<'a> {
+    /// The stock file signature. It's not used, but we still needed to read it.
     _signature: FileSignature,
+    /// The definitions for all the columns
     pub definitions: ColumnDefinitions,
+    /// The input source of the file
     file: &'a mut dyn Read,
 }
 
 impl<'a> VerticaNativeFile<'a> {
+    /// Create the struct from the `reader`
     pub fn from_reader(reader: &'a mut impl Read) -> Result<Self, Box<dyn Error>> {
         let signature = FileSignature::from_reader(reader)?;
         let definitions = ColumnDefinitions::from_reader(reader)?;
@@ -32,7 +41,10 @@ impl<'a> VerticaNativeFile<'a> {
 impl<'a> Iterator for VerticaNativeFile<'a> {
     type Item = Row;
 
+    /// Iterate through all the rows of the native file, returning them for further processing.
     fn next(&mut self) -> Option<Self::Item> {
+        // First, read a `u32` which gives the length of the row, not including the length,
+        // or the bitfield indicating null values.
         let row_length = match read_u32(&mut self.file) {
             Ok(length) => length,
             Err(_) => return None,
@@ -54,18 +66,23 @@ impl<'a> Iterator for VerticaNativeFile<'a> {
 
 #[derive(Debug)]
 #[allow(unused)]
+/// A struct containing a single row of data from the native file.
 pub struct Row {
     pub null_values: Vec<bool>,
     pub data: Vec<Option<Vec<u8>>>,
 }
 
 impl Row {
+    /// Create a `Row` from the binary file.
     fn from_reader(
         reader: &mut impl Read,
         column_widths: &Vec<u32>,
     ) -> Result<Self, Box<dyn Error>> {
         let mut data: Vec<Option<Vec<u8>>> = vec![];
 
+        // After the length field, is one or more bytes that represent a bit field,
+        // which indicates which, if any, of the columns are actually null, and therefore,
+        // not present.
         let null_values = Row::read_bitfield(reader, &column_widths)?;
 
         for (index, width) in column_widths.iter().enumerate() {
