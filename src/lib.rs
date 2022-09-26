@@ -74,6 +74,7 @@ fn read_u8(reader: &mut impl Read) -> io::Result<u8> {
 /// * `is_json` - write a JSON file instead of CSV
 /// * `is_gzip` - gzip the output
 /// * `is_json_lines` - write a [JSON-lines](https://jsonlines.org) file instead of CSV or regular JSON
+/// * `limit` - stop after `limit` rows
 pub fn process_file(
     input: String,
     output: Option<&str>,
@@ -85,6 +86,7 @@ pub fn process_file(
     is_json: bool,
     is_gzip: bool,
     is_json_lines: bool,
+    limit: usize,
 ) -> Result<(), String> {
     if !Path::new(input.as_str()).exists() {
         return Err(format!("input file {} does not exist", input));
@@ -146,6 +148,7 @@ pub fn process_file(
             types,
             tz_offset,
             is_json_lines,
+            limit,
         )
     } else {
         process_csv_file(
@@ -156,6 +159,7 @@ pub fn process_file(
             quote,
             delimiter,
             no_header,
+            limit,
         )
     };
 }
@@ -170,6 +174,7 @@ pub fn process_file(
 /// * `quote` - what to use instead of `"` for quoted strings
 /// * `delimeter` - what to use instead of `,`
 /// * `no_header` - don't include the header row
+/// * `limit` - stop after `limit` rows
 fn process_csv_file(
     native_file: VerticaNativeFile,
     writer: BufWriter<Box<dyn Write>>,
@@ -178,6 +183,7 @@ fn process_csv_file(
     quote: u8,
     delimiter: u8,
     no_header: bool,
+    limit: usize,
 ) -> Result<(), String> {
     let mut csv_writer = csv::WriterBuilder::new()
         .delimiter(delimiter)
@@ -194,7 +200,12 @@ fn process_csv_file(
     }
 
     // Loop over every row in the Vertica file, writing out a CSV row for each one.
-    for row in native_file {
+    for (i, row) in native_file.enumerate() {
+        // Stop after `limit` rows
+        if i >= limit {
+            break;
+        }
+
         match row.generate_csv_output(&types, tz_offset) {
             Ok(record) => match &csv_writer.write_record(&record[..]) {
                 Ok(_) => {}
@@ -215,12 +226,14 @@ fn process_csv_file(
 /// * `types` - the struct containing the column type info
 /// * `tz_offset` - number of hours to offset times
 /// * `is_json_lines` - use [JSON-lines](https://jsonlines.org) format, instead of regular JSON
+/// * `limit` - stop after `limit` rows
 fn process_json_file(
     native_file: VerticaNativeFile,
     writer: &mut BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
     tz_offset: i8,
     is_json_lines: bool,
+    limit: usize,
 ) -> Result<(), String> {
     // Unlike CSV files, which can be written without a header row containing column names, JSON
     // files require them.
@@ -235,6 +248,11 @@ fn process_json_file(
     }
 
     for (i, row) in native_file.enumerate() {
+        // Stop after `limit` rows
+        if i >= limit {
+            break;
+        }
+
         // If the output is not a JSON-lines file, we print a comma before every record, after
         // the first.
         if i > 0 && !is_json_lines {
@@ -274,6 +292,7 @@ mod tests {
     use std::fs::File;
     use std::path::Path;
     use std::{fs, panic};
+    use std::io::{BufRead, BufReader};
 
     use csv::StringRecord;
     use flate2::read::GzDecoder;
@@ -305,6 +324,7 @@ mod tests {
                 false,
                 false,
                 false,
+                usize::MAX,
             );
 
             assert!(result.is_ok());
@@ -354,6 +374,7 @@ mod tests {
                 false,
                 false,
                 false,
+                usize::MAX,
             );
 
             assert!(result.is_ok());
@@ -403,6 +424,7 @@ mod tests {
                 false,
                 false,
                 false,
+                usize::MAX,
             );
 
             assert!(result.is_ok());
@@ -452,6 +474,7 @@ mod tests {
                 true,
                 false,
                 false,
+                usize::MAX,
             );
 
             assert!(result.is_err());
@@ -492,6 +515,7 @@ mod tests {
                 true,
                 false,
                 false,
+                usize::MAX,
             );
 
             assert!(result.is_ok());
@@ -534,6 +558,7 @@ mod tests {
                 false,
                 true,
                 false,
+                usize::MAX,
             );
 
             assert!(result.is_ok());
@@ -583,6 +608,7 @@ mod tests {
                 true,
                 true,
                 false,
+                usize::MAX,
             );
 
             assert!(result.is_ok());
@@ -625,6 +651,7 @@ mod tests {
                 true,
                 false,
                 true,
+                usize::MAX,
             );
 
             assert!(result.is_ok());
@@ -634,6 +661,146 @@ mod tests {
 
             assert_eq!(contents["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents["The_Date"].as_str().unwrap(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_csv_file_row_limit() {
+        let output_file_name = format!(
+            "{}/{}.csv",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types-ten-rows.bin");
+        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                false,
+                false,
+                false,
+                5_usize,
+            );
+
+            assert!(result.is_ok());
+
+            let f = File::open(&output_file_name).unwrap();
+
+            let mut csv_file = csv::ReaderBuilder::new().has_headers(true).from_reader(f);
+
+            let records: Vec<StringRecord> = csv_file.records().map(|r| r.unwrap()).collect();
+
+            assert!(csv_file.has_headers());
+            assert_eq!(records.len(), 5_usize);
+
+            assert_eq!(records[0].len(), 14_usize);
+            assert_eq!(records[0][0].to_string(), "1");
+            assert_eq!(records[0][5].to_string(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_json_lines_with_row_limit() {
+        let output_file_name = format!(
+            "{}/{}.json",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types-ten-rows.bin");
+        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                true,
+                false,
+                true,
+                5_usize,
+            );
+
+            assert!(result.is_ok());
+            let f = BufReader::new(File::open(&output_file_name).unwrap());
+
+            let contents: Vec<serde_json::Value> = f.lines().map(|row|  {
+                serde_json::from_str(row.unwrap().as_str()).unwrap()
+            }).collect();
+
+            assert_eq!(contents.len(), 5_usize);
+            assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
+            assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_json_file_with_row_limit() {
+        let output_file_name = format!(
+            "{}/{}.json",
+            temp_dir().to_str().unwrap(),
+            Uuid::new_v4().to_string()
+        );
+
+        let input_file_name = String::from("data/all-types-ten-rows.bin");
+        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(
+                input_file_name,
+                Some(output_file_name.as_str()),
+                types_file_name,
+                None,
+                b'"',
+                b',',
+                false,
+                true,
+                false,
+                false,
+                5_usize,
+            );
+
+            assert!(result.is_ok());
+            let f = File::open(&output_file_name).unwrap();
+
+            let contents: serde_json::Value = serde_json::from_reader(f).unwrap();
+
+            assert_eq!(contents.as_array().unwrap().len(), 5_usize);
+            assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
+            assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {

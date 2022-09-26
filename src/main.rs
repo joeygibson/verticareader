@@ -1,4 +1,5 @@
 use std::env;
+use std::process::exit;
 
 use clap::{App, AppSettings, Arg};
 
@@ -79,6 +80,13 @@ fn main() {
                 .short('g')
                 .long("gzip")
                 .help("Compress output file using gzip"),
+        )
+        .arg(
+            Arg::with_name("limit")
+                .takes_value(true)
+                .short('l')
+                .long("limit")
+                .help("Only take the first <limit> rows"),
         );
 
     let args = app.get_matches();
@@ -87,7 +95,7 @@ fn main() {
         Some(filename) => String::from(filename),
         None => {
             eprintln!("no input file given\n");
-            return;
+            exit(1);
         }
     };
 
@@ -97,7 +105,7 @@ fn main() {
         Some(filename) => String::from(filename),
         None => {
             eprintln!("no column types file given\n");
-            return;
+            exit(1);
         }
     };
 
@@ -119,6 +127,17 @@ fn main() {
     let is_json_lines = args.is_present("json-lines");
     let is_gzip = args.is_present("gzip");
 
+    let limit = match args.value_of("limit") {
+        None => usize::MAX,
+        Some(limit) => match limit.parse::<usize>() {
+            Ok(limit) => limit,
+            Err(_) => {
+                eprintln!("invalid number of rows: {}", limit);
+                exit(1);
+            }
+        },
+    };
+
     match process_file(
         input,
         output,
@@ -130,8 +149,12 @@ fn main() {
         is_json,
         is_gzip,
         is_json_lines,
+        limit,
     ) {
         Ok(_) => {}
-        Err(e) => eprintln!("Error: {}", e),
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            exit(1);
+        }
     }
 }
