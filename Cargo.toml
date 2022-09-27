@@ -1,6 +1,6 @@
 [package]
 name = "verticareader"
-version = "1.8.0"
+version = "1.8.1"
 authors = ["Joey Gibson <joey@joeygibson.com>"]
 edition = "2018"
 description = "A program to read Vertica native binary files and convert them to CSV."
