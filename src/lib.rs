@@ -525,6 +525,7 @@ mod tests {
 
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents[0]["Bools"].as_bool().unwrap(), true);
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {
@@ -661,6 +662,7 @@ mod tests {
 
             assert_eq!(contents["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents["Bools"].as_bool().unwrap(), true);
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {
@@ -757,6 +759,7 @@ mod tests {
             assert_eq!(contents.len(), 5_usize);
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents[0]["Bools"].as_bool().unwrap(), true);
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {
@@ -801,6 +804,7 @@ mod tests {
             assert_eq!(contents.as_array().unwrap().len(), 5_usize);
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents[0]["Bools"].as_bool().unwrap(), true);
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {

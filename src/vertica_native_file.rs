@@ -218,7 +218,7 @@ impl Row {
                 | ColumnType::Binary
                 | ColumnType::Interval
                 | ColumnType::UUID => Value::String(value),
-                ColumnType::Boolean => Value::Bool(value == "true"),
+                ColumnType::Boolean => Value::Bool(value == "1"),
             };
 
             record.insert(name, mapped_value);
