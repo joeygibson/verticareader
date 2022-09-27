@@ -290,9 +290,9 @@ fn write_json_row(writer: &mut BufWriter<Box<dyn Write>>, buf: &[u8]) {
 mod tests {
     use std::env::temp_dir;
     use std::fs::File;
+    use std::io::{BufRead, BufReader};
     use std::path::Path;
     use std::{fs, panic};
-    use std::io::{BufRead, BufReader};
 
     use csv::StringRecord;
     use flate2::read::GzDecoder;
@@ -525,6 +525,7 @@ mod tests {
 
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents[0]["Bools"].as_bool().unwrap(), true);
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {
@@ -661,6 +662,7 @@ mod tests {
 
             assert_eq!(contents["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents["Bools"].as_bool().unwrap(), true);
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {
@@ -750,13 +752,15 @@ mod tests {
             assert!(result.is_ok());
             let f = BufReader::new(File::open(&output_file_name).unwrap());
 
-            let contents: Vec<serde_json::Value> = f.lines().map(|row|  {
-                serde_json::from_str(row.unwrap().as_str()).unwrap()
-            }).collect();
+            let contents: Vec<serde_json::Value> = f
+                .lines()
+                .map(|row| serde_json::from_str(row.unwrap().as_str()).unwrap())
+                .collect();
 
             assert_eq!(contents.len(), 5_usize);
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents[0]["Bools"].as_bool().unwrap(), true);
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {
@@ -801,6 +805,7 @@ mod tests {
             assert_eq!(contents.as_array().unwrap().len(), 5_usize);
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
+            assert_eq!(contents[0]["Bools"].as_bool().unwrap(), true);
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {

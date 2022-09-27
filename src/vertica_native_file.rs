@@ -1,8 +1,5 @@
-use std::collections::HashMap;
 use std::error::Error;
 use std::io::Read;
-
-use serde_json::{Number, Value};
 
 use crate::column_definitions::ColumnDefinitions;
 use crate::column_type::ColumnType;
@@ -182,52 +179,44 @@ impl Row {
         types: &ColumnTypes,
         tz_offset: i8,
     ) -> Result<String, Box<dyn Error>> {
-        let mut record = HashMap::new();
+        let record: String = self
+            .data
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                let column_conversion = &types.column_conversions[index];
 
-        for (index, column) in self.data.iter().enumerate() {
-            let column_conversion = &types.column_conversions[index];
+                let name = types.column_names[index].clone();
+                let value =
+                    types.column_types[index].format_value(column, tz_offset, column_conversion);
 
-            let name = types.column_names[index].clone();
-            let value =
-                types.column_types[index].format_value(column, tz_offset, column_conversion);
-
-            // Generating JSON is more involved than CSV, and the `serde_json` crate requires
-            // wrapping values in a struct that indicates its actual type. So we need to map
-            // Vertica types into `serde_json` types.
-            let mapped_value = match types.column_types[index] {
-                ColumnType::Integer | ColumnType::Numeric => {
-                    if value.is_empty() {
-                        Value::Null
-                    } else {
-                        let num = value.parse::<i64>().unwrap();
-                        Value::Number(Number::from(num))
+                // Numbers and booleans don't need to be quoted in JSON, so we handle them
+                // differently. Every other type gets quoted.
+                match types.column_types[index] {
+                    ColumnType::Integer | ColumnType::Numeric | ColumnType::Float => {
+                        if value.is_empty() {
+                            format!("\"{}\": null", name)
+                        } else {
+                            format!("\"{}\": {}", name, value)
+                        }
+                    }
+                    ColumnType::Boolean => {
+                        // And booleans need to be converted from 1 or 0 to true or false
+                        format!("\"{}\": {}", name, value == "1")
+                    }
+                    _ => {
+                        if value.is_empty() {
+                            format!("\"{}\": \"\"", name)
+                        } else {
+                            format!("\"{}\": \"{}\"", name, value)
+                        }
                     }
                 }
-                ColumnType::Float => {
-                    let num = value.parse::<f64>().unwrap();
-                    Value::Number(Number::from_f64(num).unwrap())
-                }
-                ColumnType::Char
-                | ColumnType::Varchar
-                | ColumnType::Date
-                | ColumnType::Timestamp
-                | ColumnType::TimestampTz
-                | ColumnType::Time
-                | ColumnType::TimeTz
-                | ColumnType::Varbinary
-                | ColumnType::Binary
-                | ColumnType::Interval
-                | ColumnType::UUID => Value::String(value),
-                ColumnType::Boolean => Value::Bool(value == "true"),
-            };
+            })
+            .collect::<Vec<String>>()
+            .join(",");
 
-            record.insert(name, mapped_value);
-        }
-
-        // Use the `serde_json` crate to convert the `HashMap` into a JSON string
-        let str_record = serde_json::to_string(&record).unwrap();
-
-        Ok(str_record)
+        Ok(format!("{{{}}}", record))
     }
 }
 
