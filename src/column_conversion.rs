@@ -33,7 +33,7 @@ impl ColumnConversion {
 
                     match addr {
                         Err(e) => {
-                            eprintln!("error: {}", e);
+                            eprintln!("error converting to IP address: {}", e);
                             "".to_string()
                         }
                         Ok(s) => s.to_string(),
@@ -55,7 +55,7 @@ impl ColumnConversion {
                         tmp_bytes.iter().map(|b| format!("{:0>2X}", b)).collect();
                     match u128::from_str_radix(&tmp.join(""), 16) {
                         Err(e) => {
-                            eprintln!("error: {}", e);
+                            eprintln!("error converting to IP address: {}", e);
                             "".to_string()
                         }
                         Ok(s) => {
