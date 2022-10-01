@@ -3,14 +3,15 @@ use std::fs::File;
 use std::io;
 use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
-use std::str::FromStr;
 
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
+use crate::args::Args;
 use column_types::ColumnTypes;
 use vertica_native_file::VerticaNativeFile;
 
+pub mod args;
 mod column_conversion;
 mod column_definitions;
 mod column_type;
@@ -64,40 +65,18 @@ fn read_u8(reader: &mut impl Read) -> io::Result<u8> {
 
 /// The start of the actual file processing.
 ///
-/// * `input` - the name of the Vertica native file to read from
-/// * `output` - the name of the file to write, or `None` for `stdout`
-/// * `types` - the name of the type specification file
-/// * `tz_offset` - the number of hours to offset a time, or `None` for 0
-/// * `quote` - what to use instead of `"` for quoted strings
-/// * `delimiter` - what to use instead of `,` for CSV files
-/// * `no_header` - whether to include a header for CSV files
-/// * `is_json` - write a JSON file instead of CSV
-/// * `is_gzip` - gzip the output
-/// * `is_json_lines` - write a [JSON-lines](https://jsonlines.org) file instead of CSV or regular JSON
-/// * `limit` - stop after `limit` rows
-pub fn process_file(
-    input: String,
-    output: Option<&str>,
-    types: String,
-    tz_offset: Option<&str>,
-    quote: u8,
-    delimiter: u8,
-    no_header: bool,
-    is_json: bool,
-    is_gzip: bool,
-    is_json_lines: bool,
-    limit: usize,
-) -> Result<(), String> {
-    if !Path::new(input.as_str()).exists() {
-        return Err(format!("input file {} does not exist", input));
+/// * `args` - all the command line arguments
+pub fn process_file(args: Args) -> Result<(), String> {
+    if !Path::new(&args.input.as_str()).exists() {
+        return Err(format!("input file {} does not exist", args.input));
     }
 
-    let mut input_file = match File::open(&input) {
+    let mut input_file = match File::open(&args.input) {
         Ok(file) => BufReader::new(file),
         Err(e) => return Err(e.to_string()),
     };
 
-    let types_reader = BufReader::new(File::open(types).unwrap());
+    let types_reader = BufReader::new(File::open(&args.types).unwrap());
 
     // Read in the column type specification from the file. If this load fails, we abort,
     // because we can't proceed without this information.
@@ -106,12 +85,6 @@ pub fn process_file(
         Err(e) => {
             return Err(format!("parsing column types: {}", e));
         }
-    };
-
-    // If no offset was passed in, we'll use 0.
-    let tz_offset = match tz_offset {
-        None => 0i8,
-        Some(s) => i8::from_str(&s).unwrap_or(0i8),
     };
 
     // This line takes the input file, parses the headers, and gets ready to start retrieving
@@ -125,14 +98,14 @@ pub fn process_file(
     // passed in `-g`, we will gzip the output. If the user specified the same file name
     // for input and output files, we abort.
     let mut base_writer: BufWriter<Box<dyn Write>> =
-        BufWriter::new(if let Some(filename) = output {
-            if filename == input {
+        BufWriter::new(if let Some(filename) = &args.output {
+            if filename == &args.input {
                 return Err("can't overwrite input file".to_string());
             }
 
             let tmp_writer = File::create(filename).unwrap();
 
-            if is_gzip {
+            if args.is_gzip {
                 Box::new(GzEncoder::new(tmp_writer, Compression::default()))
             } else {
                 Box::new(tmp_writer)
@@ -141,26 +114,10 @@ pub fn process_file(
             Box::new(stdout())
         });
 
-    return if is_json || is_json_lines {
-        process_json_file(
-            native_file,
-            &mut base_writer,
-            types,
-            tz_offset,
-            is_json_lines,
-            limit,
-        )
+    return if args.is_json || args.is_json_lines {
+        process_json_file(native_file, &mut base_writer, types, args)
     } else {
-        process_csv_file(
-            native_file,
-            base_writer,
-            types,
-            tz_offset,
-            quote,
-            delimiter,
-            no_header,
-            limit,
-        )
+        process_csv_file(native_file, base_writer, types, args)
     };
 }
 
@@ -170,27 +127,19 @@ pub fn process_file(
 /// * `native_file` - the Vertica native binary file
 /// * `writer` - the output; either a file, or `stdout`
 /// * `types` - the struct containing the column type info
-/// * `tz_offset` - number of hours to offset times
-/// * `quote` - what to use instead of `"` for quoted strings
-/// * `delimeter` - what to use instead of `,`
-/// * `no_header` - don't include the header row
-/// * `limit` - stop after `limit` rows
+/// * `args` - all the other command line arguments
 fn process_csv_file(
     native_file: VerticaNativeFile,
     writer: BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
-    tz_offset: i8,
-    quote: u8,
-    delimiter: u8,
-    no_header: bool,
-    limit: usize,
+    args: Args,
 ) -> Result<(), String> {
     let mut csv_writer = csv::WriterBuilder::new()
-        .delimiter(delimiter)
-        .quote(quote)
+        .delimiter(args.delimiter)
+        .quote(if args.single_quotes { b'\'' } else { b'\"' })
         .from_writer(writer);
 
-    if !no_header {
+    if !args.no_header {
         if types.has_names() {
             match csv_writer.write_record(&types.column_names[..]) {
                 Ok(_) => {}
@@ -202,11 +151,11 @@ fn process_csv_file(
     // Loop over every row in the Vertica file, writing out a CSV row for each one.
     for (i, row) in native_file.enumerate() {
         // Stop after `limit` rows
-        if i >= limit {
+        if i >= args.limit {
             break;
         }
 
-        match row.generate_csv_output(&types, tz_offset) {
+        match row.generate_csv_output(&types, args.tz_offset) {
             Ok(record) => match &csv_writer.write_record(&record[..]) {
                 Ok(_) => {}
                 Err(e) => eprintln!("error: {}", e),
@@ -224,16 +173,12 @@ fn process_csv_file(
 /// * `native_file` - the Vertica native binary file
 /// * `writer` - the output; either a file, or `stdout`
 /// * `types` - the struct containing the column type info
-/// * `tz_offset` - number of hours to offset times
-/// * `is_json_lines` - use [JSON-lines](https://jsonlines.org) format, instead of regular JSON
-/// * `limit` - stop after `limit` rows
+/// * `args` - all the other command line arguments
 fn process_json_file(
     native_file: VerticaNativeFile,
     writer: &mut BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
-    tz_offset: i8,
-    is_json_lines: bool,
-    limit: usize,
+    args: Args,
 ) -> Result<(), String> {
     // Unlike CSV files, which can be written without a header row containing column names, JSON
     // files require them.
@@ -243,35 +188,35 @@ fn process_json_file(
 
     // If the output is not a JSON-lines file, we will create a top-level array,
     // and include each row inside that, separated by a comma.
-    if !is_json_lines {
+    if !args.is_json_lines {
         write_json_row(writer, "[".as_bytes());
     }
 
     for (i, row) in native_file.enumerate() {
         // Stop after `limit` rows
-        if i >= limit {
+        if i >= args.limit {
             break;
         }
 
         // If the output is not a JSON-lines file, we print a comma before every record, after
         // the first.
-        if i > 0 && !is_json_lines {
+        if i > 0 && !args.is_json_lines {
             write_json_row(writer, ",".as_bytes());
         }
 
-        match row.generate_json_output(&types, tz_offset) {
+        match row.generate_json_output(&types, args.tz_offset) {
             Ok(record) => write_json_row(writer, record.as_bytes()),
             Err(e) => eprintln!("error: {}", e),
         }
 
         // If the output is a JSON-lines file, we need to append a newline after each object.
-        if is_json_lines {
+        if args.is_json_lines {
             write_json_row(writer, "\n".as_bytes());
         }
     }
 
     // If the output is not a JSON-lines file, we need to close the array at the end.
-    if !is_json_lines {
+    if !args.is_json_lines {
         write_json_row(writer, "]\n".as_bytes());
     }
 
@@ -290,16 +235,16 @@ fn write_json_row(writer: &mut BufWriter<Box<dyn Write>>, buf: &[u8]) {
 mod tests {
     use std::env::temp_dir;
     use std::fs::File;
+    use std::io::{BufRead, BufReader};
     use std::path::Path;
     use std::{fs, panic};
-    use std::io::{BufRead, BufReader};
 
     use csv::StringRecord;
     use flate2::read::GzDecoder;
     use serde_json::Value;
     use uuid::Uuid;
 
-    use crate::process_file;
+    use crate::{Args, process_file};
 
     #[test]
     fn test_csv_file_with_no_headers() {
@@ -309,23 +254,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types.bin");
-        let types_file_name = String::from("data/all-valid-types.txt");
+        let args = Args {
+            input: String::from("data/all-types.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: true,
+            single_quotes: false,
+            is_json: false,
+            is_json_lines: false,
+            is_gzip: false,
+            limit: usize::MAX
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                false,
-                false,
-                false,
-                usize::MAX,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
 
@@ -359,23 +303,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types.bin");
-        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+        let args = Args {
+            input: String::from("data/all-types.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types-with-names.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: false,
+            is_json_lines: false,
+            is_gzip: false,
+            limit: usize::MAX
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                false,
-                false,
-                false,
-                usize::MAX,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
 
@@ -409,23 +352,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types.bin");
-        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+        let args = Args {
+            input: String::from("data/all-types.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types-with-names.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: true,
+            single_quotes: false,
+            is_json: false,
+            is_json_lines: false,
+            is_gzip: false,
+            limit: usize::MAX
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                true,
-                false,
-                false,
-                false,
-                usize::MAX,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
 
@@ -459,23 +401,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types.bin");
-        let types_file_name = String::from("data/all-valid-types.txt");
+        let args = Args {
+            input: String::from("data/all-types.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: true,
+            is_json_lines: false,
+            is_gzip: false,
+            limit: usize::MAX
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                true,
-                false,
-                false,
-                usize::MAX,
-            );
+            let result = process_file(args);
 
             assert!(result.is_err());
             assert_eq!(
@@ -500,23 +441,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types.bin");
-        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+        let args = Args {
+            input: String::from("data/all-types.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types-with-names.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: true,
+            is_json_lines: false,
+            is_gzip: false,
+            limit: usize::MAX
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                true,
-                false,
-                false,
-                usize::MAX,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
             let f = File::open(&output_file_name).unwrap();
@@ -544,23 +484,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types.bin");
-        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+        let args = Args {
+            input: String::from("data/all-types.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types-with-names.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: false,
+            is_json_lines: false,
+            is_gzip: true,
+            limit: usize::MAX
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                false,
-                true,
-                false,
-                usize::MAX,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
 
@@ -594,23 +533,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types.bin");
-        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+        let args = Args {
+            input: String::from("data/all-types.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types-with-names.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: true,
+            is_json_lines: false,
+            is_gzip: true,
+            limit: usize::MAX
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                true,
-                true,
-                false,
-                usize::MAX,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
             let f = GzDecoder::new(File::open(&output_file_name).unwrap());
@@ -637,23 +575,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types.bin");
-        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+        let args = Args {
+            input: String::from("data/all-types.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types-with-names.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: false,
+            is_json_lines: true,
+            is_gzip: false,
+            limit: usize::MAX
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                true,
-                false,
-                true,
-                usize::MAX,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
             let f = File::open(&output_file_name).unwrap();
@@ -681,23 +618,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types-ten-rows.bin");
-        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+        let args = Args {
+            input: String::from("data/all-types-ten-rows.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types-with-names.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: false,
+            is_json_lines: false,
+            is_gzip: false,
+            limit: 5_usize
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                false,
-                false,
-                false,
-                5_usize,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
 
@@ -731,30 +667,30 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types-ten-rows.bin");
-        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+        let args = Args {
+            input: String::from("data/all-types-ten-rows.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types-with-names.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: false,
+            is_json_lines: true,
+            is_gzip: false,
+            limit: 5_usize
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                true,
-                false,
-                true,
-                5_usize,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
             let f = BufReader::new(File::open(&output_file_name).unwrap());
 
-            let contents: Vec<serde_json::Value> = f.lines().map(|row|  {
-                serde_json::from_str(row.unwrap().as_str()).unwrap()
-            }).collect();
+            let contents: Vec<serde_json::Value> = f
+                .lines()
+                .map(|row| serde_json::from_str(row.unwrap().as_str()).unwrap())
+                .collect();
 
             assert_eq!(contents.len(), 5_usize);
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
@@ -778,23 +714,22 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let input_file_name = String::from("data/all-types-ten-rows.bin");
-        let types_file_name = String::from("data/all-valid-types-with-names.txt");
+        let args = Args {
+            input: String::from("data/all-types-ten-rows.bin"),
+            output: Some(output_file_name.clone()),
+            types: String::from("data/all-valid-types-with-names.txt"),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: true,
+            is_json_lines: false,
+            is_gzip: false,
+            limit: 5_usize
+        };
 
         let rc = panic::catch_unwind(|| {
-            let result = process_file(
-                input_file_name,
-                Some(output_file_name.as_str()),
-                types_file_name,
-                None,
-                b'"',
-                b',',
-                false,
-                true,
-                false,
-                false,
-                5_usize,
-            );
+            let result = process_file(args);
 
             assert!(result.is_ok());
             let f = File::open(&output_file_name).unwrap();
