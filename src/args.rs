@@ -47,4 +47,44 @@ pub struct Args {
     /// Only take the first <LIMIT> rows
     #[arg(short, long, required = false, default_value_t = usize::MAX, hide_default_value=true)]
     pub limit: usize,
+
+    /// Prefix hex strings with 0x
+    #[arg(short = 'H', long)]
+    pub hex_prefix: bool,
+}
+
+impl Args {
+    pub fn with_defaults() -> Self {
+        Self {
+            input: "".to_string(),
+            output: None,
+            types: "".to_string(),
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: false,
+            is_json_lines: false,
+            is_gzip: false,
+            limit: 5_usize,
+            hex_prefix: false,
+        }
+    }
+
+    pub fn with_most_defaults(input: String, output: Option<String>, types: String) -> Self {
+        Self {
+            input,
+            output,
+            types,
+            tz_offset: 0,
+            delimiter: b',',
+            no_header: false,
+            single_quotes: false,
+            is_json: false,
+            is_json_lines: false,
+            is_gzip: false,
+            limit: 5_usize,
+            hex_prefix: false,
+        }
+    }
 }

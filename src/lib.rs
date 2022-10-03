@@ -7,9 +7,10 @@ use std::path::Path;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
-use crate::args::Args;
 use column_types::ColumnTypes;
 use vertica_native_file::VerticaNativeFile;
+
+use crate::args::Args;
 
 pub mod args;
 mod column_conversion;
@@ -115,7 +116,7 @@ pub fn process_file(args: Args) -> Result<(), String> {
         });
 
     return if args.is_json || args.is_json_lines {
-        process_json_file(native_file, &mut base_writer, types, args)
+        process_json_file(native_file, &mut base_writer, types, &args)
     } else {
         process_csv_file(native_file, base_writer, types, args)
     };
@@ -155,7 +156,7 @@ fn process_csv_file(
             break;
         }
 
-        match row.generate_csv_output(&types, args.tz_offset) {
+        match row.generate_csv_output(&types, args.tz_offset, &args) {
             Ok(record) => match &csv_writer.write_record(&record[..]) {
                 Ok(_) => {}
                 Err(e) => eprintln!("error: {}", e),
@@ -178,7 +179,7 @@ fn process_json_file(
     native_file: VerticaNativeFile,
     writer: &mut BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
-    args: Args,
+    args: &Args,
 ) -> Result<(), String> {
     // Unlike CSV files, which can be written without a header row containing column names, JSON
     // files require them.
@@ -204,7 +205,7 @@ fn process_json_file(
             write_json_row(writer, ",".as_bytes());
         }
 
-        match row.generate_json_output(&types, args.tz_offset) {
+        match row.generate_json_output(&types, args.tz_offset, args) {
             Ok(record) => write_json_row(writer, record.as_bytes()),
             Err(e) => eprintln!("error: {}", e),
         }
@@ -244,7 +245,7 @@ mod tests {
     use serde_json::Value;
     use uuid::Uuid;
 
-    use crate::{Args, process_file};
+    use crate::{process_file, Args};
 
     #[test]
     fn test_csv_file_with_no_headers() {
@@ -254,19 +255,13 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: true,
-            single_quotes: false,
-            is_json: false,
-            is_json_lines: false,
-            is_gzip: false,
-            limit: usize::MAX
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types.txt"),
+        );
+
+        args.no_header = true;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -303,19 +298,11 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types-with-names.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: false,
-            single_quotes: false,
-            is_json: false,
-            is_json_lines: false,
-            is_gzip: false,
-            limit: usize::MAX
-        };
+        let args = Args::with_most_defaults(
+            String::from("data/all-types.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -352,19 +339,13 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types-with-names.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: true,
-            single_quotes: false,
-            is_json: false,
-            is_json_lines: false,
-            is_gzip: false,
-            limit: usize::MAX
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+
+        args.no_header = true;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -401,19 +382,12 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: false,
-            single_quotes: false,
-            is_json: true,
-            is_json_lines: false,
-            is_gzip: false,
-            limit: usize::MAX
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types.txt"),
+        );
+        args.is_json = true;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -441,19 +415,12 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types-with-names.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: false,
-            single_quotes: false,
-            is_json: true,
-            is_json_lines: false,
-            is_gzip: false,
-            limit: usize::MAX
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+        args.is_json = true;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -484,19 +451,13 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types-with-names.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: false,
-            single_quotes: false,
-            is_json: false,
-            is_json_lines: false,
-            is_gzip: true,
-            limit: usize::MAX
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+
+        args.is_gzip = true;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -533,19 +494,14 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types-with-names.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: false,
-            single_quotes: false,
-            is_json: true,
-            is_json_lines: false,
-            is_gzip: true,
-            limit: usize::MAX
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types-ten-rows.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+
+        args.is_json = true;
+        args.is_gzip = true;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -575,19 +531,12 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types-with-names.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: false,
-            single_quotes: false,
-            is_json: false,
-            is_json_lines: true,
-            is_gzip: false,
-            limit: usize::MAX
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+        args.is_json_lines = true;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -618,19 +567,13 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types-ten-rows.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types-with-names.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: false,
-            single_quotes: false,
-            is_json: false,
-            is_json_lines: false,
-            is_gzip: false,
-            limit: 5_usize
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types-ten-rows.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+
+        args.limit = 5_usize;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -667,19 +610,13 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types-ten-rows.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types-with-names.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: false,
-            single_quotes: false,
-            is_json: false,
-            is_json_lines: true,
-            is_gzip: false,
-            limit: 5_usize
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types-ten-rows.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+        args.is_json_lines = true;
+        args.limit = 5_usize;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);
@@ -714,19 +651,13 @@ mod tests {
             Uuid::new_v4().to_string()
         );
 
-        let args = Args {
-            input: String::from("data/all-types-ten-rows.bin"),
-            output: Some(output_file_name.clone()),
-            types: String::from("data/all-valid-types-with-names.txt"),
-            tz_offset: 0,
-            delimiter: b',',
-            no_header: false,
-            single_quotes: false,
-            is_json: true,
-            is_json_lines: false,
-            is_gzip: false,
-            limit: 5_usize
-        };
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types-ten-rows.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+
+        args.is_json = true;
 
         let rc = panic::catch_unwind(|| {
             let result = process_file(args);

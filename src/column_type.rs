@@ -11,6 +11,7 @@ use regex::Regex;
 use uuid::Uuid;
 
 use crate::column_conversion::ColumnConversion;
+use crate::Args;
 
 #[derive(Debug, PartialEq)]
 /// An enum of all possible Vertica data types. We read in a file of type information to
@@ -110,6 +111,7 @@ impl ColumnType {
         value: &Option<Vec<u8>>,
         tz_offset: i8,
         column_conversion: &Option<ColumnConversion>,
+        args: &Args,
     ) -> String {
         match &value {
             Some(value) => {
@@ -230,7 +232,9 @@ impl ColumnType {
                                 let byte_values: String =
                                     filtered_bytes.iter().map(|b| format!("{:X?}", b)).collect();
 
-                                format!("0x{}", byte_values)
+                                let prefix = if args.hex_prefix { "0x" } else { "" };
+
+                                format!("{}{}", prefix, byte_values)
                             }
                             Some(conversion) => conversion.convert(filtered_bytes),
                         }
@@ -314,6 +318,7 @@ mod tests {
     }
 
     mod format_tests {
+        use crate::Args;
         use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
         use crate::column_type::ColumnType;
@@ -327,12 +332,14 @@ mod tests {
             let mut positives: Vec<u8> = vec![0, 23, 127];
             inputs.append(&mut positives);
 
+            let args = Args::with_defaults();
+
             let expected_outputs = vec!["-127", "-100", "-1", "0", "23", "127"];
 
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -347,6 +354,8 @@ mod tests {
 
             inputs.append(&mut positives);
 
+            let args = Args::with_defaults();
+
             let expected_outputs = vec![
                 "-32768", "-16600", "-1", "0", "23", "127", "128", "255", "256", "512", "1024",
                 "16235",
@@ -356,7 +365,7 @@ mod tests {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -375,6 +384,8 @@ mod tests {
             ];
 
             inputs.append(&mut positives);
+
+            let args = Args::with_defaults();
 
             let expected_outputs = vec![
                 "-2147483648",
@@ -402,7 +413,7 @@ mod tests {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -441,6 +452,8 @@ mod tests {
 
             inputs.append(&mut positives);
 
+            let args = Args::with_defaults();
+
             let expected_outputs = vec![
                 "-9223372036854775808",
                 "-2147483648",
@@ -469,7 +482,7 @@ mod tests {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -481,13 +494,15 @@ mod tests {
 
             let inputs: Vec<f64> = vec![-123456.123, -23.123, 0_f64, 123.23, 123456.123];
 
+            let args = Args::with_defaults();
+
             let expected_outputs = vec!["-123456.123", "-23.123", "0", "123.23", "123456.123"];
 
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -499,12 +514,14 @@ mod tests {
 
             let inputs: Vec<u8> = vec!['a' as u8, 'A' as u8, 'z' as u8, 'Z' as u8];
 
+            let args = Args::with_defaults();
+
             let expected_outputs = vec!["a", "A", "z", "Z"];
 
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -516,13 +533,15 @@ mod tests {
 
             let inputs: Vec<&str> = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀", "foo, bar, baz"];
 
+            let args = Args::with_defaults();
+
             let expected_outputs = vec!["a", "A", "z", "Z", "abc", "FOO", "🚀", "foo, bar, baz"];
 
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let bytes = input.as_bytes();
                 let byte_vec_option: Option<Vec<u8>> = Some(bytes.to_vec());
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -534,12 +553,14 @@ mod tests {
 
             let inputs: Vec<u8> = vec![1, 0];
 
+            let args = Args::with_defaults();
+
             let expected_outputs = vec!["1", "0"];
 
             for (input, expected_output) in inputs.iter().zip(expected_outputs) {
                 let byte_vec_option: Option<Vec<u8>> = Some(vec![*input]);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -563,11 +584,13 @@ mod tests {
 
             let u_inputs = vec_i_into_u::<i64, u64>(inputs);
 
+            let args = Args::with_defaults();
+
             for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -604,11 +627,13 @@ mod tests {
 
             let u_inputs = vec_i_into_u::<i64, u64>(inputs);
 
+            let args = Args::with_defaults();
+
             for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -652,11 +677,13 @@ mod tests {
 
             let u_inputs = vec_i_into_u::<i64, u64>(inputs);
 
+            let args = Args::with_defaults();
+
             for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(output, expected_output);
             }
@@ -679,11 +706,13 @@ mod tests {
 
             let u_inputs = vec_i_into_u::<i64, u64>(inputs);
 
+            let args = Args::with_defaults();
+
             for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
@@ -726,11 +755,14 @@ mod tests {
             let expected_outputs = vec!["0x1", "0xA", "0x7B", "0x9054C"];
             let u_inputs = vec_i_into_u::<i64, u64>(inputs);
 
+            let mut args = Args::with_defaults();
+            args.hex_prefix = true;
+
             for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(output, expected_output);
             }
@@ -744,11 +776,13 @@ mod tests {
             let expected_outputs = vec!["123456789", "123456789123456789"];
             let u_inputs = vec_i_into_u::<i64, u64>(inputs);
 
+            let args = Args::with_defaults();
+
             for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(output, expected_output);
             }
@@ -772,11 +806,13 @@ mod tests {
 
             let u_inputs = vec_i_into_u::<i64, u64>(inputs);
 
+            let args = Args::with_defaults();
+
             for (input, expected_output) in u_inputs.iter().zip(expected_outputs) {
                 let byte_vec = input.to_le_bytes().to_vec();
                 let byte_vec_option: Option<Vec<u8>> = Some(byte_vec);
 
-                let output = column_type.format_value(&byte_vec_option, 0, &None);
+                let output = column_type.format_value(&byte_vec_option, 0, &None, &args);
 
                 assert_eq!(expected_output, output);
             }
