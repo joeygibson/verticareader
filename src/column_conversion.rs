@@ -31,7 +31,7 @@ impl ColumnConversion {
                         bytes[2..].iter().map(|b| format!("{:0>2X}", b)).collect();
 
                     if tmp.len() == 0 {
-                        return "".to_string()
+                        return "".to_string();
                     }
 
                     let addr = u32::from_str_radix(&tmp.join(""), 16).map(Ipv4Addr::from);

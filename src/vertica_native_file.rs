@@ -8,7 +8,7 @@ use crate::column_definitions::ColumnDefinitions;
 use crate::column_type::ColumnType;
 use crate::column_types::ColumnTypes;
 use crate::file_signature::FileSignature;
-use crate::{read_u32, read_variable};
+use crate::{read_u32, read_variable, Args};
 
 /// The [Vertica native binary](https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/CreatingNativeBinaryFormatFiles.htm)
 /// is a compact, structured, binary file format for copy large amounts of data into the Vertica
@@ -157,6 +157,7 @@ impl Row {
         &self,
         types: &ColumnTypes,
         tz_offset: i8,
+        args: &Args,
     ) -> Result<Vec<String>, Box<dyn Error>> {
         let mut record: Vec<String> = vec![];
 
@@ -165,7 +166,7 @@ impl Row {
             let column_conversion = &types.column_conversions[index];
 
             let output =
-                types.column_types[index].format_value(column, tz_offset, column_conversion);
+                types.column_types[index].format_value(column, tz_offset, column_conversion, &args);
 
             record.push(output);
         }
@@ -181,6 +182,7 @@ impl Row {
         &self,
         types: &ColumnTypes,
         tz_offset: i8,
+        args: &Args,
     ) -> Result<String, Box<dyn Error>> {
         let mut record = HashMap::new();
 
@@ -189,7 +191,7 @@ impl Row {
 
             let name = types.column_names[index].clone();
             let value =
-                types.column_types[index].format_value(column, tz_offset, column_conversion);
+                types.column_types[index].format_value(column, tz_offset, column_conversion, &args);
 
             // Generating JSON is more involved than CSV, and the `serde_json` crate requires
             // wrapping values in a struct that indicates its actual type. So we need to map
