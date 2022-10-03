@@ -29,6 +29,11 @@ impl ColumnConversion {
                 if bytes[0] == 0xff && bytes[1] == 0xff {
                     let tmp: Vec<String> =
                         bytes[2..].iter().map(|b| format!("{:0>2X}", b)).collect();
+
+                    if tmp.len() == 0 {
+                        return "".to_string()
+                    }
+
                     let addr = u32::from_str_radix(&tmp.join(""), 16).map(Ipv4Addr::from);
 
                     match addr {
@@ -76,6 +81,16 @@ impl ColumnConversion {
 #[cfg(test)]
 mod tests {
     use crate::column_conversion::ColumnConversion;
+
+    #[test]
+    fn test_with_empty() {
+        let bytes = vec![0xFF, 0xFF];
+
+        let cnv = ColumnConversion::IpAddress;
+        let val = cnv.convert(bytes);
+
+        assert_eq!("", val);
+    }
 
     #[test]
     fn test_ip_v4() {

@@ -1,6 +1,6 @@
 target
-*.csv
-*.json
+*.csv*
+*.json*
 private-data
 
 tmp/
