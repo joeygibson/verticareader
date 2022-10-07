@@ -1,9 +1,7 @@
-use std::error::Error;
 use std::fs::File;
-use std::io;
 use std::io::{stdout, BufReader, BufWriter, Read, Write};
-use std::path::Path;
 
+use anyhow::{anyhow, Context};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
@@ -24,7 +22,7 @@ mod vertica_native_file;
 ///
 /// * `reader` - something implementing `Read` to read from
 /// * `length` - the number of bytes to read
-fn read_variable(reader: &mut impl Read, length: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+fn read_variable(reader: &mut impl Read, length: usize) -> anyhow::Result<Vec<u8>> {
     let mut vec = vec![0u8; length];
     reader.read_exact(vec.as_mut_slice())?;
 
@@ -34,7 +32,7 @@ fn read_variable(reader: &mut impl Read, length: usize) -> Result<Vec<u8>, Box<d
 /// Read 4 bytes from the stream, and convert it to a u32
 ///
 /// * `reader` - something implementing `Read` to read from
-fn read_u32(reader: &mut impl Read) -> io::Result<u32> {
+fn read_u32(reader: &mut impl Read) -> anyhow::Result<u32> {
     let mut bytes: [u8; 4] = [0; 4];
 
     reader.read_exact(&mut bytes)?;
@@ -45,7 +43,7 @@ fn read_u32(reader: &mut impl Read) -> io::Result<u32> {
 /// Read 2 bytes from the stream, and convert it to a u16
 ///
 /// * `reader` - something implementing `Read` to read from
-fn read_u16(reader: &mut impl Read) -> io::Result<u16> {
+fn read_u16(reader: &mut impl Read) -> anyhow::Result<u16> {
     let mut bytes: [u8; 2] = [0; 2];
 
     reader.read_exact(&mut bytes)?;
@@ -56,7 +54,7 @@ fn read_u16(reader: &mut impl Read) -> io::Result<u16> {
 /// Read 1 bytes from the stream, and return it
 ///
 /// * `reader` - something implementing `Read` to read from
-fn read_u8(reader: &mut impl Read) -> io::Result<u8> {
+fn read_u8(reader: &mut impl Read) -> anyhow::Result<u8> {
     let mut bytes: [u8; 1] = [0; 1];
 
     reader.read_exact(&mut bytes)?;
@@ -67,33 +65,29 @@ fn read_u8(reader: &mut impl Read) -> io::Result<u8> {
 /// The start of the actual file processing.
 ///
 /// * `args` - all the command line arguments
-pub fn process_file(args: Args) -> Result<(), String> {
-    if !Path::new(&args.input.as_str()).exists() {
-        return Err(format!("input file {} does not exist", args.input));
-    }
-
+pub fn process_file(args: Args) -> anyhow::Result<()> {
     let mut input_file = match File::open(&args.input) {
         Ok(file) => BufReader::new(file),
-        Err(e) => return Err(e.to_string()),
+        Err(e) => return Err(anyhow!("opening input file [{}]: {}", args.input, e)),
     };
 
-    let types_reader = BufReader::new(File::open(&args.types).unwrap());
+    let types_reader = match File::open(&args.types) {
+        Ok(file) => BufReader::new(file),
+        Err(e) => return Err(anyhow!("opening types file [{}]: {}", args.types, e)),
+    };
 
     // Read in the column type specification from the file. If this load fails, we abort,
     // because we can't proceed without this information.
     let types = match ColumnTypes::from_reader(types_reader) {
         Ok(types) => types,
         Err(e) => {
-            return Err(format!("parsing column types: {}", e));
+            return Err(anyhow!("parsing column types: {}", e));
         }
     };
 
     // This line takes the input file, parses the headers, and gets ready to start retrieving
     // rows.
-    let native_file = match VerticaNativeFile::from_reader(&mut input_file) {
-        Ok(i) => i,
-        Err(e) => return Err(e.to_string()),
-    };
+    let native_file = VerticaNativeFile::from_reader(&mut input_file).context("creating file")?;
 
     // If no output file is specified, we will use `stdout`. In both cases, if the user
     // passed in `-g`, we will gzip the output. If the user specified the same file name
@@ -101,7 +95,11 @@ pub fn process_file(args: Args) -> Result<(), String> {
     let mut base_writer: BufWriter<Box<dyn Write>> =
         BufWriter::new(if let Some(filename) = &args.output {
             if filename == &args.input {
-                return Err("can't overwrite input file".to_string());
+                return Err(anyhow!("can't overwrite input file"));
+            }
+
+            if filename == &args.types {
+                return Err(anyhow!("can't overwrite types file"));
             }
 
             let tmp_writer = File::create(filename).unwrap();
@@ -134,7 +132,7 @@ fn process_csv_file(
     writer: BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
     args: Args,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
     let mut csv_writer = csv::WriterBuilder::new()
         .delimiter(args.delimiter)
         .quote(if args.single_quotes { b'\'' } else { b'\"' })
@@ -180,11 +178,13 @@ fn process_json_file(
     writer: &mut BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
     args: &Args,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
     // Unlike CSV files, which can be written without a header row containing column names, JSON
     // files require them.
     if !types.has_names() {
-        return Err("JSON files require column names in types file".to_string());
+        return Err(anyhow!(
+            "JSON files require column names in types file".to_string()
+        ));
     }
 
     // If the output is not a JSON-lines file, we will create a top-level array,
@@ -210,7 +210,7 @@ fn process_json_file(
             Err(e) => {
                 eprintln!("error: {}", e);
                 continue;
-            },
+            }
         }
 
         // If the output is a JSON-lines file, we need to append a newline after each object.
@@ -397,7 +397,7 @@ mod tests {
 
             assert!(result.is_err());
             assert_eq!(
-                result.err().unwrap(),
+                result.err().unwrap().to_string(),
                 "JSON files require column names in types file".to_string()
             );
         });
@@ -627,7 +627,7 @@ mod tests {
             assert!(result.is_ok());
             let f = BufReader::new(File::open(&output_file_name).unwrap());
 
-            let contents: Vec<serde_json::Value> = f
+            let contents: Vec<Value> = f
                 .lines()
                 .map(|row| serde_json::from_str(row.unwrap().as_str()).unwrap())
                 .collect();
@@ -668,7 +668,7 @@ mod tests {
             assert!(result.is_ok());
             let f = File::open(&output_file_name).unwrap();
 
-            let contents: serde_json::Value = serde_json::from_reader(f).unwrap();
+            let contents: Value = serde_json::from_reader(f).unwrap();
 
             assert_eq!(contents.as_array().unwrap().len(), 5_usize);
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);

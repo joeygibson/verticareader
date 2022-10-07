@@ -1,6 +1,6 @@
+use anyhow::anyhow;
 use core::fmt;
 use std::error;
-use std::error::Error;
 use std::fmt::Formatter;
 use std::io::Read;
 
@@ -39,7 +39,7 @@ impl error::Error for FileSignatureError {
 }
 
 impl FileSignature {
-    pub fn from_reader(reader: &mut impl Read) -> Result<Self, Box<dyn Error>> {
+    pub fn from_reader(reader: &mut impl Read) -> anyhow::Result<Self> {
         let mut data: [u8; 11] = [0; 11];
 
         for i in 0..FILE_SIGNATURE_LENGTH {
@@ -53,10 +53,10 @@ impl FileSignature {
     }
 }
 
-fn validate(data: &[u8; 11]) -> Result<(), Box<dyn Error>> {
+fn validate(data: &[u8; 11]) -> anyhow::Result<()> {
     for (expected, value) in VALID_FILE_SIGNATURE_BYTES.iter().zip(data.iter()) {
         if expected != value {
-            return Err(Box::new(FileSignatureError));
+            return Err(anyhow!(FileSignatureError));
         }
     }
 

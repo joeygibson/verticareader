@@ -1,7 +1,7 @@
+use anyhow::anyhow;
 use std::convert::TryInto;
 use std::ops::Add;
 use std::panic;
-use std::result::Result;
 
 use chrono::prelude::*;
 use chrono::Duration;
@@ -69,7 +69,7 @@ pub enum ColumnType {
 
 impl ColumnType {
     /// Read the types file and build the structure.
-    pub fn from_string(string: &str) -> Result<ColumnType, String> {
+    pub fn from_string(string: &str) -> anyhow::Result<ColumnType> {
         lazy_static! {
             static ref PAREN_REGEX: Regex = Regex::new(r"\(.+\)").unwrap();
         }
@@ -92,7 +92,7 @@ impl ColumnType {
             "numeric" => ColumnType::Numeric,
             "interval" => ColumnType::Interval,
             "uuid" => ColumnType::UUID,
-            _ => return Err(format!("invalid type: {}", string.clone())),
+            _ => return Err(anyhow!("invalid type: {}", string.clone())),
         };
 
         Ok(result)
