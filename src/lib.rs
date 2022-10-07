@@ -207,7 +207,10 @@ fn process_json_file(
 
         match row.generate_json_output(&types, args.tz_offset, args) {
             Ok(record) => write_json_row(writer, record.as_bytes()),
-            Err(e) => eprintln!("error: {}", e),
+            Err(e) => {
+                eprintln!("error: {}", e);
+                continue;
+            },
         }
 
         // If the output is a JSON-lines file, we need to append a newline after each object.
