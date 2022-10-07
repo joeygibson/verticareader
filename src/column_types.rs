@@ -1,7 +1,5 @@
-use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::result::Result;
 
 use crate::column_conversion::ColumnConversion;
 use crate::column_type::ColumnType;
@@ -15,7 +13,7 @@ pub struct ColumnTypes {
 }
 
 impl ColumnTypes {
-    pub fn from_reader(reader: BufReader<File>) -> Result<Self, Box<dyn Error>> {
+    pub fn from_reader(reader: BufReader<File>) -> anyhow::Result<Self> {
         let mut column_types: Vec<ColumnType> = vec![];
         let mut column_names: Vec<String> = vec![];
         let mut column_conversions: Vec<Option<ColumnConversion>> = vec![];

@@ -1,4 +1,4 @@
-use std::io::{Read, Result};
+use std::io::Read;
 
 use crate::{read_u16, read_u32, read_u8};
 
@@ -16,7 +16,7 @@ pub struct ColumnDefinitions {
 }
 
 impl ColumnDefinitions {
-    pub fn from_reader(reader: &mut impl Read) -> Result<Self> {
+    pub fn from_reader(reader: &mut impl Read) -> anyhow::Result<Self> {
         let header_length: u32 = read_u32(reader)?;
         let version = read_u16(reader)?;
 

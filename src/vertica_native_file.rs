@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::error::Error;
 use std::io::Read;
 
 use serde_json::{Number, Value};
@@ -29,7 +28,7 @@ pub struct VerticaNativeFile<'a> {
 
 impl<'a> VerticaNativeFile<'a> {
     /// Create the struct from the `reader`
-    pub fn from_reader(reader: &'a mut impl Read) -> Result<Self, Box<dyn Error>> {
+    pub fn from_reader(reader: &'a mut impl Read) -> anyhow::Result<Self> {
         let signature = FileSignature::from_reader(reader)?;
         let definitions = ColumnDefinitions::from_reader(reader)?;
 
@@ -80,10 +79,7 @@ pub struct Row {
 
 impl Row {
     /// Create a `Row` from the binary file.
-    fn from_reader(
-        reader: &mut impl Read,
-        column_widths: &Vec<u32>,
-    ) -> Result<Self, Box<dyn Error>> {
+    fn from_reader(reader: &mut impl Read, column_widths: &Vec<u32>) -> anyhow::Result<Self> {
         let mut data: Vec<Option<Vec<u8>>> = vec![];
 
         // After the length field, is one or more bytes that represent a bit field,
@@ -129,7 +125,7 @@ impl Row {
     fn read_bitfield(
         mut reader: &mut impl Read,
         column_widths: &Vec<u32>,
-    ) -> Result<Vec<bool>, Box<dyn Error>> {
+    ) -> anyhow::Result<Vec<bool>> {
         let mut null_values: Vec<bool> = vec![];
 
         // The number of bytes in the bitfield is based on the number of columns, so we have
@@ -158,7 +154,7 @@ impl Row {
         types: &ColumnTypes,
         tz_offset: i8,
         args: &Args,
-    ) -> Result<Vec<String>, Box<dyn Error>> {
+    ) -> anyhow::Result<Vec<String>> {
         let mut record: Vec<String> = vec![];
 
         // Loop over each column, format it, and push it into the vector.
@@ -183,7 +179,7 @@ impl Row {
         types: &ColumnTypes,
         tz_offset: i8,
         args: &Args,
-    ) -> Result<String, Box<dyn Error>> {
+    ) -> anyhow::Result<String> {
         let mut record = HashMap::new();
 
         for (index, column) in self.data.iter().enumerate() {

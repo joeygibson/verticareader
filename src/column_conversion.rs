@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 #[derive(Debug)]
@@ -9,11 +10,11 @@ pub enum ColumnConversion {
 }
 
 impl ColumnConversion {
-    pub fn from_string(string: &str) -> Result<ColumnConversion, String> {
+    pub fn from_string(string: &str) -> anyhow::Result<ColumnConversion> {
         let result = match string.to_lowercase().as_str() {
             "ipaddress" => ColumnConversion::IpAddress,
             "macaddress" => ColumnConversion::MacAddress,
-            _ => return Err(format!("invalid conversion: {}", string.clone())),
+            _ => return Err(anyhow!("invalid conversion: {}", string.clone())),
         };
 
         Ok(result)
