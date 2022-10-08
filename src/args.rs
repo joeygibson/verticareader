@@ -8,8 +8,12 @@ pub struct Args {
     #[arg()]
     pub input: String,
 
-    /// Output file name [default: stdout]
-    #[arg(short, long)]
+    /// Output file name
+    #[arg(
+        short,
+        long,
+        help = "by default, output name is generated from input name; use - for stdout"
+    )]
     pub output: Option<String>,
 
     /// File with list of column types, names, and conversions
