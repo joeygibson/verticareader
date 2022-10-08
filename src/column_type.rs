@@ -1,8 +1,8 @@
-use anyhow::anyhow;
 use std::convert::TryInto;
 use std::ops::Add;
 use std::panic;
 
+use anyhow::bail;
 use chrono::prelude::*;
 use chrono::Duration;
 use lazy_static::lazy_static;
@@ -92,7 +92,7 @@ impl ColumnType {
             "numeric" => ColumnType::Numeric,
             "interval" => ColumnType::Interval,
             "uuid" => ColumnType::UUID,
-            _ => return Err(anyhow!("invalid type: {}", string.clone())),
+            _ => bail!("invalid type: {}", string.clone()),
         };
 
         Ok(result)
@@ -318,10 +318,10 @@ mod tests {
     }
 
     mod format_tests {
-        use crate::Args;
         use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
         use crate::column_type::ColumnType;
+        use crate::Args;
 
         #[test]
         fn test_i8() {

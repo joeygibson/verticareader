@@ -12,7 +12,7 @@ pub struct Args {
     #[arg(
         short,
         long,
-        help = "by default, output name is generated from input name; use - for stdout"
+        help = "Output file name; use - for stdout [default: name based on input file name]"
     )]
     pub output: Option<String>,
 

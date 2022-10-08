@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
-use anyhow::{anyhow, Context};
+use anyhow::{bail, Context};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
@@ -69,12 +69,12 @@ fn read_u8(reader: &mut impl Read) -> anyhow::Result<u8> {
 pub fn process_file(args: Args) -> anyhow::Result<()> {
     let mut input_file = match File::open(&args.input) {
         Ok(file) => BufReader::new(file),
-        Err(e) => return Err(anyhow!("opening input file [{}]: {}", args.input, e)),
+        Err(e) => bail!("opening input file [{}]: {}", args.input, e),
     };
 
     let types_reader = match File::open(&args.types) {
         Ok(file) => BufReader::new(file),
-        Err(e) => return Err(anyhow!("opening types file [{}]: {}", args.types, e)),
+        Err(e) => bail!("opening types file [{}]: {}", args.types, e),
     };
 
     // Read in the column type specification from the file. If this load fails, we abort,
@@ -82,7 +82,7 @@ pub fn process_file(args: Args) -> anyhow::Result<()> {
     let types = match ColumnTypes::from_reader(types_reader) {
         Ok(types) => types,
         Err(e) => {
-            return Err(anyhow!("parsing column types: {}", e));
+            bail!("parsing column types: {}", e);
         }
     };
 
@@ -92,13 +92,32 @@ pub fn process_file(args: Args) -> anyhow::Result<()> {
 
     let output_file_name = generate_output_file_name(&args, None)?;
 
+    validate_output_file_name_ok(&args, &output_file_name)?;
+
     let mut base_writer = open_output_file_name(&args, output_file_name)?;
-    
+
     return if args.is_json || args.is_json_lines {
         process_json_file(native_file, &mut base_writer, types, &args)
     } else {
         process_csv_file(native_file, base_writer, types, args)
     };
+}
+
+/// Verify that the proposed output file isn't the same as either
+/// the input file or the types file
+///
+/// * `args` - the CLI arguments
+/// * `file_name` - the proposed output file name
+fn validate_output_file_name_ok(args: &Args, file_name: &String) -> anyhow::Result<()> {
+    if file_name == &args.input {
+        bail!("can't overwrite input file");
+    }
+
+    if file_name == &args.types {
+        bail!("can't overwrite types file");
+    }
+
+    return Ok(());
 }
 
 /// Read all the rows of the Vertica native binary file, and write them out
@@ -163,9 +182,7 @@ fn process_json_file(
     // Unlike CSV files, which can be written without a header row containing column names, JSON
     // files require them.
     if !types.has_names() {
-        return Err(anyhow!(
-            "JSON files require column names in types file".to_string()
-        ));
+        bail!("JSON files require column names in types file".to_string());
     }
 
     // If the output is not a JSON-lines file, we will create a top-level array,
@@ -237,7 +254,8 @@ fn generate_output_file_name(args: &Args, iteration: Option<u64>) -> anyhow::Res
                 .file_name()
                 .ok_or("bad output file name")
                 .unwrap()
-                .to_str().unwrap();
+                .to_str()
+                .unwrap();
             let base_name = format!("{}{}.{}", file_without_directory, iteration_tag, extension);
 
             if args.is_gzip {
@@ -338,7 +356,10 @@ mod tests {
     use serde_json::Value;
     use uuid::Uuid;
 
-    use crate::{generate_output_file_name, process_file, Args, open_output_file_name};
+    use crate::{
+        generate_output_file_name, open_output_file_name, process_file,
+        validate_output_file_name_ok, Args,
+    };
 
     #[test]
     fn test_output_filename_generation_based_on_input_csv() {
@@ -576,6 +597,53 @@ mod tests {
 
         let file_name = generate_output_file_name(&args, None).unwrap();
         assert_eq!(file_name, "foo.csv")
+    }
+
+    #[test]
+    fn test_validate_output_file_name_ok_with_good_file_name() {
+        let output_file_name = "bar.csv";
+
+        let args = Args::with_most_defaults(
+            String::from("data/all-types.bin"),
+            Some(output_file_name.to_string()),
+            String::from("data/all-valid-types.txt"),
+        );
+
+        let rc = validate_output_file_name_ok(&args, &output_file_name.to_string());
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_validate_output_file_name_ok_with_same_name_as_input() {
+        let file_name = "data/all-types.bin";
+
+        let args = Args::with_most_defaults(
+            String::from(file_name),
+            Some(file_name.to_string()),
+            String::from("data/all-valid-types.txt"),
+        );
+
+        let rc = validate_output_file_name_ok(&args, &file_name.to_string());
+
+        assert!(rc.is_err());
+        assert_eq!("can't overwrite input file", rc.unwrap_err().to_string());
+    }
+
+    #[test]
+    fn test_validate_output_file_name_ok_with_same_name_as_types_file() {
+        let file_name = "data/all-valid-types.txt";
+
+        let args = Args::with_most_defaults(
+            String::from("data/all-types.bin"),
+            Some(file_name.to_string()),
+            String::from(file_name),
+        );
+
+        let rc = validate_output_file_name_ok(&args, &file_name.to_string());
+
+        assert!(rc.is_err());
+        assert_eq!("can't overwrite types file", rc.unwrap_err().to_string());
     }
 
     #[test]
