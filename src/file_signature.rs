@@ -1,8 +1,9 @@
-use anyhow::anyhow;
 use core::fmt;
 use std::error;
 use std::fmt::Formatter;
 use std::io::Read;
+
+use anyhow::bail;
 
 use crate::read_u8;
 
@@ -56,7 +57,7 @@ impl FileSignature {
 fn validate(data: &[u8; 11]) -> anyhow::Result<()> {
     for (expected, value) in VALID_FILE_SIGNATURE_BYTES.iter().zip(data.iter()) {
         if expected != value {
-            return Err(anyhow!(FileSignatureError));
+            bail!(FileSignatureError);
         }
     }
 

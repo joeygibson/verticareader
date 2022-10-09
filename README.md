@@ -8,27 +8,27 @@ and output them in a CSV format.
 ## Usage
 
 ```bash
-convert Vertica native binary files to CSV/JSON
+A program to read Vertica native binary files and convert them to CSV.
 
-USAGE:
-    verticareader [OPTIONS] --types <types> [input]
+Usage: verticareader [OPTIONS] --types <TYPES> <INPUT>
 
-ARGS:
-    <input>    The file to process
+Arguments:
+  <INPUT>  The file to process
 
-OPTIONS:
-    -d, --delimiter <delimiter>    Field delimiter for CSV file [default: ,]
-    -g, --gzip                     Compress output file using gzip
-    -h, --help                     Print help information
-    -j, --json                     Output in JSON format [default: CSV]
-    -J, --json-lines               Output in JSON Lines format [default: CSV]
-    -l, --limit <limit>            Only take the first <limit> rows
-    -n, --no-header                Don't include column header row in CSV file
-    -o, --output <output>          Output file name [default: stdout]
-    -s, --single-quotes            Use ' for quoting in CSV file
-    -t, --types <types>            File with list of column types, names, and conversions
-    -V, --version                  Print version information
-    -z, --tz-offset <tz-offset>    +/- hours
+Options:
+  -d, --delimiter <DELIMITER>  Field delimiter for CSV file [default: ,]
+  -g, --gzip                   Compress output file using gzip
+  -h, --help                   Print help information
+  -H, --hex-prefix             Prefix hex strings with 0x
+  -j, --json                   Output in JSON format [default: CSV]
+  -J, --json-lines             Output in JSON Lines format [default: CSV]
+  -l, --limit <LIMIT>          Only take the first <LIMIT> rows
+  -n, --no-header              Don't include column header row in CSV file
+  -o, --output <OUTPUT>        Output file name; use - for stdout [default: name based on input file name]
+  -s, --single-quotes          Use ' for quoting in CSV file
+  -t, --types <TYPES>          File with list of column types, names, and conversions
+  -V, --version                Print version information
+  -z, --tz-offset <TZ_OFFSET>  +/- hours [default: 0]
 ```
 
 At its simplest, `verticareader` will read in a Vertica native file, along with a
