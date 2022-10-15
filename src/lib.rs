@@ -3,6 +3,7 @@ use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 use anyhow::{bail, Context};
+use csv::Writer;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
@@ -90,16 +91,10 @@ pub fn process_file(args: Args) -> anyhow::Result<()> {
     // rows.
     let native_file = VerticaNativeFile::from_reader(&mut input_file).context("creating file")?;
 
-    let output_file_name = generate_output_file_name(&args, None)?;
-
-    validate_output_file_name_ok(&args, &output_file_name)?;
-
-    let mut base_writer = open_output_file_name(&args, output_file_name)?;
-
     return if args.is_json || args.is_json_lines {
-        process_json_file(native_file, &mut base_writer, types, &args)
+        process_json_file(native_file, types, &args)
     } else {
-        process_csv_file(native_file, base_writer, types, args)
+        process_csv_file(native_file, types, args)
     };
 }
 
@@ -129,24 +124,21 @@ fn validate_output_file_name_ok(args: &Args, file_name: &String) -> anyhow::Resu
 /// * `args` - all the other command line arguments
 fn process_csv_file(
     native_file: VerticaNativeFile,
-    writer: BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
     args: Args,
 ) -> anyhow::Result<()> {
-    let mut csv_writer = csv::WriterBuilder::new()
-        .delimiter(args.delimiter)
-        .quote(if args.single_quotes { b'\'' } else { b'\"' })
-        .from_writer(writer);
+    let mut writer = create_csv_file(&args, None)?;
 
     if !args.no_header {
         if types.has_names() {
-            match csv_writer.write_record(&types.column_names[..]) {
+            match writer.write_record(&types.column_names[..]) {
                 Ok(_) => {}
                 Err(e) => eprintln!("error writing CSV header: {}", e),
             }
         }
     }
 
+    let mut file_no: usize = 1;
     // Loop over every row in the Vertica file, writing out a CSV row for each one.
     for (i, row) in native_file.enumerate() {
         // Stop after `limit` rows
@@ -154,8 +146,13 @@ fn process_csv_file(
             break;
         }
 
+        if i > 0 && i % args.max_rows == 0 {
+            writer = create_csv_file(&args, Some(file_no))?;
+            file_no += 1;
+        }
+
         match row.generate_csv_output(&types, args.tz_offset, &args) {
-            Ok(record) => match &csv_writer.write_record(&record[..]) {
+            Ok(record) => match &writer.write_record(&record[..]) {
                 Ok(_) => {}
                 Err(e) => eprintln!("error: {}", e),
             },
@@ -164,6 +161,30 @@ fn process_csv_file(
     }
 
     Ok(())
+}
+
+fn create_csv_file(
+    args: &Args,
+    iteration: Option<usize>,
+) -> anyhow::Result<Writer<BufWriter<Box<dyn Write>>>> {
+    let base_writer = create_output_file(&args, iteration)?;
+    let csv_writer = csv::WriterBuilder::new()
+        .delimiter(args.delimiter)
+        .quote(if args.single_quotes { b'\'' } else { b'\"' })
+        .from_writer(base_writer);
+
+    Ok(csv_writer)
+}
+
+fn create_output_file(
+    args: &Args,
+    iteration: Option<usize>,
+) -> anyhow::Result<BufWriter<Box<dyn Write>>> {
+    let output_file_name = generate_output_file_name(&args, iteration)?;
+    validate_output_file_name_ok(&args, &output_file_name)?;
+    let writer = open_output_file_name(&args, output_file_name)?;
+
+    Ok(writer)
 }
 
 /// Read all the rows of the Vertica native binary file, and write them out
@@ -175,10 +196,11 @@ fn process_csv_file(
 /// * `args` - all the other command line arguments
 fn process_json_file(
     native_file: VerticaNativeFile,
-    writer: &mut BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
     args: &Args,
 ) -> anyhow::Result<()> {
+    let mut writer = create_output_file(&args, None)?;
+
     // Unlike CSV files, which can be written without a header row containing column names, JSON
     // files require them.
     if !types.has_names() {
@@ -188,23 +210,29 @@ fn process_json_file(
     // If the output is not a JSON-lines file, we will create a top-level array,
     // and include each row inside that, separated by a comma.
     if !args.is_json_lines {
-        write_json_row(writer, "[".as_bytes());
+        write_json_row(&mut writer, "[".as_bytes());
     }
 
+    let mut file_no: usize = 1;
     for (i, row) in native_file.enumerate() {
         // Stop after `limit` rows
         if i >= args.limit {
             break;
         }
 
+        if i > 0 && i % args.max_rows == 0 {
+            writer = create_output_file(&args, Some(file_no))?;
+            file_no += 1;
+        }
+
         // If the output is not a JSON-lines file, we print a comma before every record, after
         // the first.
         if i > 0 && !args.is_json_lines {
-            write_json_row(writer, ",".as_bytes());
+            write_json_row(&mut writer, ",".as_bytes());
         }
 
         match row.generate_json_output(&types, args.tz_offset, args) {
-            Ok(record) => write_json_row(writer, record.as_bytes()),
+            Ok(record) => write_json_row(&mut writer, record.as_bytes()),
             Err(e) => {
                 eprintln!("error: {}", e);
                 continue;
@@ -213,13 +241,13 @@ fn process_json_file(
 
         // If the output is a JSON-lines file, we need to append a newline after each object.
         if args.is_json_lines {
-            write_json_row(writer, "\n".as_bytes());
+            write_json_row(&mut writer, "\n".as_bytes());
         }
     }
 
     // If the output is not a JSON-lines file, we need to close the array at the end.
     if !args.is_json_lines {
-        write_json_row(writer, "]\n".as_bytes());
+        write_json_row(&mut writer, "]\n".as_bytes());
     }
 
     return Ok(());
@@ -231,7 +259,7 @@ fn process_json_file(
 ///
 /// * `args` - the CLI arguments
 /// * `iteration` - an `Option<u64>`, that will be appended to the file stem, if present
-fn generate_output_file_name(args: &Args, iteration: Option<u64>) -> anyhow::Result<String> {
+fn generate_output_file_name(args: &Args, iteration: Option<usize>) -> anyhow::Result<String> {
     // If no output file is specified, we will create a file name based on the input file.
     // If the `iteration` argument is passed, we will append it before the extension(s)
     let file_name = match &args.output {
