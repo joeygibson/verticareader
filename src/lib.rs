@@ -3,6 +3,7 @@ use std::io::{stdout, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 use anyhow::{bail, Context};
+use csv::Writer;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
@@ -90,16 +91,10 @@ pub fn process_file(args: Args) -> anyhow::Result<()> {
     // rows.
     let native_file = VerticaNativeFile::from_reader(&mut input_file).context("creating file")?;
 
-    let output_file_name = generate_output_file_name(&args, None)?;
-
-    validate_output_file_name_ok(&args, &output_file_name)?;
-
-    let mut base_writer = open_output_file_name(&args, output_file_name)?;
-
     return if args.is_json || args.is_json_lines {
-        process_json_file(native_file, &mut base_writer, types, &args)
+        process_json_file(native_file, types, &args)
     } else {
-        process_csv_file(native_file, base_writer, types, args)
+        process_csv_file(native_file, types, args)
     };
 }
 
@@ -129,14 +124,46 @@ fn validate_output_file_name_ok(args: &Args, file_name: &String) -> anyhow::Resu
 /// * `args` - all the other command line arguments
 fn process_csv_file(
     native_file: VerticaNativeFile,
-    writer: BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
     args: Args,
 ) -> anyhow::Result<()> {
+    let mut writer = create_csv_file(&args, &types, None)?;
+
+    let mut file_no: usize = 1;
+    // Loop over every row in the Vertica file, writing out a CSV row for each one.
+    for (i, row) in native_file.enumerate() {
+        // Stop after `limit` rows
+        if i >= args.limit {
+            break;
+        }
+
+        if i > 0 && i % args.max_rows == 0 {
+            writer = create_csv_file(&args, &types, Some(file_no))?;
+            file_no += 1;
+        }
+
+        match row.generate_csv_output(&types, args.tz_offset, &args) {
+            Ok(record) => match &writer.write_record(&record[..]) {
+                Ok(_) => {}
+                Err(e) => eprintln!("error: {}", e),
+            },
+            Err(e) => eprintln!("error: {}", e),
+        }
+    }
+
+    Ok(())
+}
+
+fn create_csv_file(
+    args: &Args,
+    types: &ColumnTypes,
+    iteration: Option<usize>,
+) -> anyhow::Result<Writer<BufWriter<Box<dyn Write>>>> {
+    let base_writer = create_output_file(&args, iteration)?;
     let mut csv_writer = csv::WriterBuilder::new()
         .delimiter(args.delimiter)
         .quote(if args.single_quotes { b'\'' } else { b'\"' })
-        .from_writer(writer);
+        .from_writer(base_writer);
 
     if !args.no_header {
         if types.has_names() {
@@ -147,23 +174,33 @@ fn process_csv_file(
         }
     }
 
-    // Loop over every row in the Vertica file, writing out a CSV row for each one.
-    for (i, row) in native_file.enumerate() {
-        // Stop after `limit` rows
-        if i >= args.limit {
-            break;
-        }
+    Ok(csv_writer)
+}
 
-        match row.generate_csv_output(&types, args.tz_offset, &args) {
-            Ok(record) => match &csv_writer.write_record(&record[..]) {
-                Ok(_) => {}
-                Err(e) => eprintln!("error: {}", e),
-            },
-            Err(e) => eprintln!("error: {}", e),
-        }
+fn create_json_file(
+    args: &Args,
+    iteration: Option<usize>,
+) -> anyhow::Result<BufWriter<Box<dyn Write>>> {
+    let mut writer = create_output_file(&args, iteration)?;
+
+    // If the output is not a JSON-lines file, we will create a top-level array,
+    // and include each row inside that, separated by a comma.
+    if !args.is_json_lines {
+        write_json_row(&mut writer, "[".as_bytes());
     }
 
-    Ok(())
+    Ok(writer)
+}
+
+fn create_output_file(
+    args: &Args,
+    iteration: Option<usize>,
+) -> anyhow::Result<BufWriter<Box<dyn Write>>> {
+    let output_file_name = generate_output_file_name(&args, iteration)?;
+    validate_output_file_name_ok(&args, &output_file_name)?;
+    let writer = open_output_file_name(&args, output_file_name)?;
+
+    Ok(writer)
 }
 
 /// Read all the rows of the Vertica native binary file, and write them out
@@ -175,7 +212,6 @@ fn process_csv_file(
 /// * `args` - all the other command line arguments
 fn process_json_file(
     native_file: VerticaNativeFile,
-    writer: &mut BufWriter<Box<dyn Write>>,
     types: ColumnTypes,
     args: &Args,
 ) -> anyhow::Result<()> {
@@ -185,26 +221,32 @@ fn process_json_file(
         bail!("JSON files require column names in types file".to_string());
     }
 
-    // If the output is not a JSON-lines file, we will create a top-level array,
-    // and include each row inside that, separated by a comma.
-    if !args.is_json_lines {
-        write_json_row(writer, "[".as_bytes());
-    }
+    let mut writer = create_json_file(&args, None)?;
 
+    let mut file_no: usize = 1;
     for (i, row) in native_file.enumerate() {
         // Stop after `limit` rows
         if i >= args.limit {
             break;
         }
 
+        if i > 0 && i % args.max_rows == 0 {
+            if !args.is_json_lines {
+                write_json_row(&mut writer, "]\n".as_bytes());
+            }
+
+            writer = create_json_file(&args, Some(file_no))?;
+            file_no += 1;
+        }
+
         // If the output is not a JSON-lines file, we print a comma before every record, after
         // the first.
-        if i > 0 && !args.is_json_lines {
-            write_json_row(writer, ",".as_bytes());
+        if i > 0 && !args.is_json_lines && i % args.max_rows != 0 {
+            write_json_row(&mut writer, ",".as_bytes());
         }
 
         match row.generate_json_output(&types, args.tz_offset, args) {
-            Ok(record) => write_json_row(writer, record.as_bytes()),
+            Ok(record) => write_json_row(&mut writer, record.as_bytes()),
             Err(e) => {
                 eprintln!("error: {}", e);
                 continue;
@@ -213,13 +255,13 @@ fn process_json_file(
 
         // If the output is a JSON-lines file, we need to append a newline after each object.
         if args.is_json_lines {
-            write_json_row(writer, "\n".as_bytes());
+            write_json_row(&mut writer, "\n".as_bytes());
         }
     }
 
     // If the output is not a JSON-lines file, we need to close the array at the end.
     if !args.is_json_lines {
-        write_json_row(writer, "]\n".as_bytes());
+        write_json_row(&mut writer, "]\n".as_bytes());
     }
 
     return Ok(());
@@ -231,7 +273,7 @@ fn process_json_file(
 ///
 /// * `args` - the CLI arguments
 /// * `iteration` - an `Option<u64>`, that will be appended to the file stem, if present
-fn generate_output_file_name(args: &Args, iteration: Option<u64>) -> anyhow::Result<String> {
+fn generate_output_file_name(args: &Args, iteration: Option<usize>) -> anyhow::Result<String> {
     // If no output file is specified, we will create a file name based on the input file.
     // If the `iteration` argument is passed, we will append it before the extension(s)
     let file_name = match &args.output {
@@ -1056,6 +1098,7 @@ mod tests {
             String::from("data/all-valid-types-with-names.txt"),
         );
 
+        args.limit = 5;
         args.is_json = true;
 
         let rc = panic::catch_unwind(|| {
@@ -1070,6 +1113,158 @@ mod tests {
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
             assert_eq!(contents[0]["Bools"].as_bool().unwrap(), true);
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_csv_file_max_rows() {
+        let tmp_dir = temp_dir().to_str().unwrap().to_string();
+        let uuid = Uuid::new_v4().to_string();
+
+        let output_file_name = format!("{}/{}.csv", &tmp_dir, uuid);
+
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types-ten-rows.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+
+        args.max_rows = 5_usize;
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(args);
+
+            assert!(result.is_ok());
+
+            let files = fs::read_dir(&tmp_dir).unwrap();
+
+            let files_of_iterest = files
+                .map(|file| file.unwrap().file_name().into_string().unwrap())
+                .filter(|file| file.starts_with(&uuid))
+                .collect::<Vec<String>>();
+
+            assert_eq!(files_of_iterest.len(), 2);
+
+            for file_name in files_of_iterest {
+                let output_file_name = format!("{}/{}", &tmp_dir, file_name);
+                let f = File::open(&output_file_name).unwrap();
+
+                let mut csv_file = csv::ReaderBuilder::new().has_headers(true).from_reader(f);
+
+                let records: Vec<StringRecord> = csv_file.records().map(|r| r.unwrap()).collect();
+
+                assert!(csv_file.has_headers());
+                assert_eq!(records.len(), 5_usize);
+                assert_eq!(records[0].len(), 14_usize);
+            }
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_json_lines_file_max_rows() {
+        let tmp_dir = temp_dir().to_str().unwrap().to_string();
+        let uuid = Uuid::new_v4().to_string();
+
+        let output_file_name = format!("{}/{}.jsonl", &tmp_dir, uuid);
+
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types-ten-rows.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+
+        args.is_json_lines = true;
+        args.max_rows = 5_usize;
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(args);
+
+            assert!(result.is_ok());
+
+            let files = fs::read_dir(&tmp_dir).unwrap();
+
+            let files_of_iterest = files
+                .map(|file| file.unwrap().file_name().into_string().unwrap())
+                .filter(|file| file.starts_with(&uuid))
+                .collect::<Vec<String>>();
+
+            assert_eq!(files_of_iterest.len(), 2);
+
+            for file_name in files_of_iterest {
+                let output_file_name = format!("{}/{}", &tmp_dir, file_name);
+
+                let f = BufReader::new(File::open(&output_file_name).unwrap());
+
+                let contents: Vec<Value> = f
+                    .lines()
+                    .map(|row| serde_json::from_str(row.unwrap().as_str()).unwrap())
+                    .collect();
+
+                assert_eq!(contents.len(), 5_usize);
+            }
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_json_file_max_rows() {
+        let tmp_dir = temp_dir().to_str().unwrap().to_string();
+        let uuid = Uuid::new_v4().to_string();
+
+        let output_file_name = format!("{}/{}.json", &tmp_dir, uuid);
+
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types-ten-rows.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+
+        args.is_json = true;
+        args.max_rows = 5_usize;
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(args);
+
+            assert!(result.is_ok());
+
+            let files = fs::read_dir(&tmp_dir).unwrap();
+
+            let files_of_iterest = files
+                .map(|file| file.unwrap().file_name().into_string().unwrap())
+                .filter(|file| file.starts_with(&uuid))
+                .collect::<Vec<String>>();
+
+            assert_eq!(files_of_iterest.len(), 2);
+
+            for file_name in files_of_iterest {
+                let output_file_name = format!("{}/{}", &tmp_dir, file_name);
+
+                let f = BufReader::new(File::open(&output_file_name).unwrap());
+
+                let contents: Value = serde_json::from_reader(f).unwrap();
+
+                assert_eq!(contents.as_array().unwrap().len(), 5_usize);
+            }
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {

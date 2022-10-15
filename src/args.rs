@@ -55,6 +55,10 @@ pub struct Args {
     /// Prefix hex strings with 0x
     #[arg(short = 'H', long)]
     pub hex_prefix: bool,
+
+    /// Maximum rows per file
+    #[arg(short, long, default_value_t = usize::MAX, hide_default_value=true)]
+    pub max_rows: usize,
 }
 
 impl Args {
@@ -70,8 +74,9 @@ impl Args {
             is_json: false,
             is_json_lines: false,
             is_gzip: false,
-            limit: 5_usize,
+            limit: usize::MAX,
             hex_prefix: false,
+            max_rows: usize::MAX,
         }
     }
 
@@ -87,8 +92,9 @@ impl Args {
             is_json: false,
             is_json_lines: false,
             is_gzip: false,
-            limit: 5_usize,
+            limit: usize::MAX,
             hex_prefix: false,
+            max_rows: usize::MAX,
         }
     }
 }
