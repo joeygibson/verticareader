@@ -74,7 +74,7 @@ impl Args {
             is_json: false,
             is_json_lines: false,
             is_gzip: false,
-            limit: 5_usize,
+            limit: usize::MAX,
             hex_prefix: false,
             max_rows: usize::MAX,
         }
@@ -92,7 +92,7 @@ impl Args {
             is_json: false,
             is_json_lines: false,
             is_gzip: false,
-            limit: 5_usize,
+            limit: usize::MAX,
             hex_prefix: false,
             max_rows: usize::MAX,
         }
