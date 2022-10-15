@@ -127,16 +127,7 @@ fn process_csv_file(
     types: ColumnTypes,
     args: Args,
 ) -> anyhow::Result<()> {
-    let mut writer = create_csv_file(&args, None)?;
-
-    if !args.no_header {
-        if types.has_names() {
-            match writer.write_record(&types.column_names[..]) {
-                Ok(_) => {}
-                Err(e) => eprintln!("error writing CSV header: {}", e),
-            }
-        }
-    }
+    let mut writer = create_csv_file(&args, &types, None)?;
 
     let mut file_no: usize = 1;
     // Loop over every row in the Vertica file, writing out a CSV row for each one.
@@ -147,7 +138,7 @@ fn process_csv_file(
         }
 
         if i > 0 && i % args.max_rows == 0 {
-            writer = create_csv_file(&args, Some(file_no))?;
+            writer = create_csv_file(&args, &types, Some(file_no))?;
             file_no += 1;
         }
 
@@ -165,13 +156,23 @@ fn process_csv_file(
 
 fn create_csv_file(
     args: &Args,
+    types: &ColumnTypes,
     iteration: Option<usize>,
 ) -> anyhow::Result<Writer<BufWriter<Box<dyn Write>>>> {
     let base_writer = create_output_file(&args, iteration)?;
-    let csv_writer = csv::WriterBuilder::new()
+    let mut csv_writer = csv::WriterBuilder::new()
         .delimiter(args.delimiter)
         .quote(if args.single_quotes { b'\'' } else { b'\"' })
         .from_writer(base_writer);
+
+    if !args.no_header {
+        if types.has_names() {
+            match csv_writer.write_record(&types.column_names[..]) {
+                Ok(_) => {}
+                Err(e) => eprintln!("error writing CSV header: {}", e),
+            }
+        }
+    }
 
     Ok(csv_writer)
 }
@@ -1098,6 +1099,55 @@ mod tests {
             assert_eq!(contents[0]["IntCol"].as_i64().unwrap(), 1);
             assert_eq!(contents[0]["The_Date"].as_str().unwrap(), "1999-01-08");
             assert_eq!(contents[0]["Bools"].as_bool().unwrap(), true);
+        });
+
+        match fs::remove_file(Path::new(&output_file_name)) {
+            Ok(_) => {}
+            Err(e) => eprintln!("error removing {}, {}", &output_file_name, e),
+        }
+
+        assert!(rc.is_ok());
+    }
+
+    #[test]
+    fn test_csv_file_max_rows() {
+        let tmp_dir = temp_dir().to_str().unwrap().to_string();
+        let uuid = Uuid::new_v4().to_string();
+
+        let output_file_name = format!("{}/{}.csv", &tmp_dir, uuid);
+
+        let mut args = Args::with_most_defaults(
+            String::from("data/all-types-ten-rows.bin"),
+            Some(output_file_name.clone()),
+            String::from("data/all-valid-types-with-names.txt"),
+        );
+
+        args.max_rows = 5_usize;
+
+        let rc = panic::catch_unwind(|| {
+            let result = process_file(args);
+
+            assert!(result.is_ok());
+
+            let files = fs::read_dir(tmp_dir).unwrap();
+
+            let files_of_iterest = files
+                .map(|file| file.unwrap().file_name().into_string().unwrap())
+                .filter(|file| file.starts_with(&uuid))
+                .collect::<Vec<String>>();
+
+            let f = File::open(&output_file_name).unwrap();
+
+            let mut csv_file = csv::ReaderBuilder::new().has_headers(true).from_reader(f);
+
+            let records: Vec<StringRecord> = csv_file.records().map(|r| r.unwrap()).collect();
+
+            assert!(csv_file.has_headers());
+            assert_eq!(records.len(), 5_usize);
+
+            assert_eq!(records[0].len(), 14_usize);
+            assert_eq!(records[0][0].to_string(), "1");
+            assert_eq!(records[0][5].to_string(), "1999-01-08");
         });
 
         match fs::remove_file(Path::new(&output_file_name)) {
