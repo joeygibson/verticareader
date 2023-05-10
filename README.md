@@ -3,12 +3,12 @@
 ![Release Status](https://github.com/joeygibson/verticareader/workflows/release/badge.svg)
 
 A tool to read [Vertica native binary files](https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/AdministratorsGuide/BinaryFilesAppendix/CreatingNativeBinaryFormatFiles.htm)
-and output them in a CSV format. 
+and output them in a CSV, or JSON, format. 
 
 ## Usage
 
 ```bash
-A program to read Vertica native binary files and convert them to CSV.
+A program to read Vertica native binary files and convert them to CSV, or JSON.
 
 Usage: verticareader [OPTIONS] --types <TYPES> <INPUT>
 
@@ -141,3 +141,4 @@ I modified that hex source to generate the other two data files, with their vari
 changes, and ran `scripts/hex-to-binary` on them, too.
 
 To go from binary to hex, you can run `hexdump -v <input file>`.
+
