@@ -15,7 +15,7 @@ impl ColumnConversion {
         let result = match string.to_lowercase().as_str() {
             "ipaddress" => ColumnConversion::IpAddress,
             "macaddress" => ColumnConversion::MacAddress,
-            _ => bail!("invalid conversion: {}", string.clone()),
+            _ => bail!("invalid conversion: {}", string),
         };
 
         Ok(result)

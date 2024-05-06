@@ -92,7 +92,7 @@ impl ColumnType {
             "numeric" => ColumnType::Numeric,
             "interval" => ColumnType::Interval,
             "uuid" => ColumnType::UUID,
-            _ => bail!("invalid type: {}", string.clone()),
+            _ => bail!("invalid type: {}", string),
         };
 
         Ok(result)

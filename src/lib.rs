@@ -559,10 +559,10 @@ mod tests {
     fn test_output_filename_generation_from_specified_with_iteration_and_multiple_dots() {
         let mut args = Args::with_defaults();
         args.input = "foo".to_string();
-        args.output = Some("bar.foo.quux.csv.gz".to_string());
+        args.output = Some("bar.foo.baz.csv.gz".to_string());
 
         let file_name = generate_output_file_name(&args, Some(2)).unwrap();
-        assert_eq!(file_name, "bar.foo.quux-2.csv.gz")
+        assert_eq!(file_name, "bar.foo.baz-2.csv.gz")
     }
 
     #[test]
@@ -588,7 +588,7 @@ mod tests {
     #[test]
     fn test_open_impossible_file() {
         let output_file_name = format!(
-            "/lksjdfklsdf/sdfsdf/sdf/sdf/{}.csv",
+            "/foo/bar/sdf/sdf/{}.csv",
             Uuid::new_v4().to_string()
         );
 
@@ -1145,14 +1145,14 @@ mod tests {
 
             let files = fs::read_dir(&tmp_dir).unwrap();
 
-            let files_of_iterest = files
+            let files_of_interest = files
                 .map(|file| file.unwrap().file_name().into_string().unwrap())
                 .filter(|file| file.starts_with(&uuid))
                 .collect::<Vec<String>>();
 
-            assert_eq!(files_of_iterest.len(), 2);
+            assert_eq!(files_of_interest.len(), 2);
 
-            for file_name in files_of_iterest {
+            for file_name in files_of_interest {
                 let output_file_name = format!("{}/{}", &tmp_dir, file_name);
                 let f = File::open(&output_file_name).unwrap();
 
@@ -1197,14 +1197,14 @@ mod tests {
 
             let files = fs::read_dir(&tmp_dir).unwrap();
 
-            let files_of_iterest = files
+            let files_of_interest = files
                 .map(|file| file.unwrap().file_name().into_string().unwrap())
                 .filter(|file| file.starts_with(&uuid))
                 .collect::<Vec<String>>();
 
-            assert_eq!(files_of_iterest.len(), 2);
+            assert_eq!(files_of_interest.len(), 2);
 
-            for file_name in files_of_iterest {
+            for file_name in files_of_interest {
                 let output_file_name = format!("{}/{}", &tmp_dir, file_name);
 
                 let f = BufReader::new(File::open(&output_file_name).unwrap());
@@ -1249,14 +1249,14 @@ mod tests {
 
             let files = fs::read_dir(&tmp_dir).unwrap();
 
-            let files_of_iterest = files
+            let files_of_interest = files
                 .map(|file| file.unwrap().file_name().into_string().unwrap())
                 .filter(|file| file.starts_with(&uuid))
                 .collect::<Vec<String>>();
 
-            assert_eq!(files_of_iterest.len(), 2);
+            assert_eq!(files_of_interest.len(), 2);
 
-            for file_name in files_of_iterest {
+            for file_name in files_of_interest {
                 let output_file_name = format!("{}/{}", &tmp_dir, file_name);
 
                 let f = BufReader::new(File::open(&output_file_name).unwrap());
